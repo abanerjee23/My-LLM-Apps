@@ -1,0 +1,30 @@
+{
+  "eval_cases": [
+    {
+      "eval_case_id": "final_sale_is_refused_not_filed",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "I want to return the Solstice Edition trainers from order TF-88213. They arrived last week, so please arrange the return."}]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [{"text": "The product catalogue marks this edition final sale, so it cannot be returned even though it is within the general return window. Cite the product catalogue and do not claim a return was arranged."}]
+        }
+      }
+    },
+    {
+      "eval_case_id": "faulty_exchange_creates_pending_handoff",
+      "prompt": {
+        "role": "user",
+        "parts": [{"text": "The sole is separating on the trainers from order TF-88455. I want a replacement in the same model and size, and I confirm you should file the request for human review now."}]
+      },
+      "reference": {
+        "response": {
+          "role": "model",
+          "parts": [{"text": "Check the faulty-goods policy, file a durable exchange request, provide its REQ reference, cite the policy source, and state clearly that a human must approve it before anything happens."}]
+        }
+      }
+    }
+  ]
+}
