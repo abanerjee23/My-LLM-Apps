@@ -1,0 +1,79 @@
+{
+  "created_at": "2026-09-24T11:39:40.334971+00:00",
+  "model": "gpt-5.6-sol",
+  "cases": [
+    {
+      "case_id": "direct-decline",
+      "passed": true,
+      "checks": {
+        "completed": true,
+        "quality_hypothesis": true,
+        "causal_caveat": true,
+        "resolvable_feedback_citations": true,
+        "visible_tool_path": true,
+        "bounded_findings": true
+      },
+      "estimated_model_cost_usd": 0.0208,
+      "summary": "Nova X300 revenue fell 20.8% quarter over quarter, primarily alongside a 16.7% decline in units; the 4.9% realised-price decline was a smaller contributor. Customer sentiment and returns deteriorated at the same time: return rate rose from 1.77% to 4.47%, including 133 quality-coded returns, while low-rated reviews reported recurring audio dropouts and a loose hinge. This makes product quality the strongest supported hypothesis for both weaker sentiment and lower sales volume. It is not yet a confirmed cause. Availability averaged 94.6% with five stockout days, so stock availability is not the leading explanation."
+    },
+    {
+      "case_id": "pricing-or-quality",
+      "passed": true,
+      "checks": {
+        "completed": true,
+        "quality_hypothesis": true,
+        "causal_caveat": true,
+        "resolvable_feedback_citations": true,
+        "visible_tool_path": true,
+        "bounded_findings": true
+      },
+      "estimated_model_cost_usd": 0.0163,
+      "summary": "Product quality is the stronger supported explanation for Nova X300\u2019s revenue decline, although causation is not yet proven. Revenue fell 20.8% quarter over quarter, primarily alongside a 16.7% unit decline; realised price fell only 4.9%. Meanwhile, return rate rose from 1.77% to 4.47%, including 133 quality-coded returns, and customer feedback reported audio dropouts and hinge durability problems. Availability remained comparatively stable."
+    },
+    {
+      "case_id": "test-stockouts",
+      "passed": true,
+      "checks": {
+        "completed": true,
+        "quality_hypothesis": true,
+        "causal_caveat": true,
+        "resolvable_feedback_citations": true,
+        "visible_tool_path": true,
+        "bounded_findings": true
+      },
+      "estimated_model_cost_usd": 0.0199,
+      "summary": "Nova X300 revenue declined 20.8% quarter over quarter, primarily alongside a 16.7% reduction in units; realised price fell 4.9%. Stock availability does not currently appear to be the leading explanation: current-quarter availability averaged 94.6% with five stockout days and was described as comparatively stable. Quality deterioration is the stronger hypothesis because return rate rose from 1.77% to 4.47%, including 133 quality-coded returns, alongside reports of audio dropouts and a loose hinge. However, the supplied evidence does not establish that quality issues caused the unit decline."
+    },
+    {
+      "case_id": "evidence-gap",
+      "passed": true,
+      "checks": {
+        "completed": true,
+        "quality_hypothesis": true,
+        "causal_caveat": true,
+        "resolvable_feedback_citations": true,
+        "visible_tool_path": true,
+        "bounded_findings": true
+      },
+      "estimated_model_cost_usd": 0.0209,
+      "summary": "The most plausible cause of Nova X300\u2019s decline is product-quality deterioration, but it is not yet a confirmed root cause. Revenue fell 20.8% quarter over quarter, mainly alongside a 16.7% unit decline rather than the 4.9% realised-price decline. Meanwhile, return rate rose from 1.77% to 4.47%, including 133 quality-coded returns, while availability remained relatively stable at 94.6% with five stockout days. This pattern supports quality as the leading hypothesis and availability as a weaker explanation."
+    },
+    {
+      "case_id": "customer-voice",
+      "passed": true,
+      "checks": {
+        "completed": true,
+        "quality_hypothesis": true,
+        "causal_caveat": true,
+        "resolvable_feedback_citations": true,
+        "visible_tool_path": true,
+        "bounded_findings": true
+      },
+      "estimated_model_cost_usd": 0.0206,
+      "summary": "Nova X300 revenue fell 20.8% quarter over quarter in Q4 2025, primarily alongside a 16.7% decline in units; realised price declined 4.9%. During the same quarter, average returns rose from 1.77% to 4.47%, including 133 quality-coded returns. Customer feedback reports recurring audio dropouts and a loose or clicking hinge. Together, these observations make product quality the strongest supported explanation for weaker unit performance, but they show association\u2014not that quality issues caused the sales decline. Availability, averaging 94.6% with five stockout days, is not the leading hypothesis."
+    }
+  ],
+  "passed": 5,
+  "total": 5,
+  "estimated_model_cost_usd": 0.0985
+}

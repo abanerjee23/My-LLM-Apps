@@ -1,0 +1,24 @@
+{
+  "cases": [
+    {
+      "id": "direct-decline",
+      "brief": "Why did revenue and customer sentiment decline for Nova X300 in the latest quarter?"
+    },
+    {
+      "id": "pricing-or-quality",
+      "brief": "Nova X300 was growing, then revenue fell. Was pricing or product quality the stronger explanation?"
+    },
+    {
+      "id": "test-stockouts",
+      "brief": "Investigate the Nova X300 decline and check whether stock availability explains it."
+    },
+    {
+      "id": "evidence-gap",
+      "brief": "Find the most plausible cause of Nova X300's recent decline, but tell me what data is missing before we claim root cause."
+    },
+    {
+      "id": "customer-voice",
+      "brief": "Connect Nova X300 commercial performance to what customers are reporting in the latest quarter."
+    }
+  ]
+}
