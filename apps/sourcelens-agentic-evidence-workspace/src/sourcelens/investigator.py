@@ -17,6 +17,7 @@ from .models import (
     InvestigationStatus,
     utc_now,
 )
+from .observability import investigation_trace
 from .query import QueryResult
 from .store import AppStore
 
@@ -58,10 +59,11 @@ class Investigator:
                 return product["product_id"], product["product_name"]
         return None
 
-    def _resolve_uploaded_source(self, brief: str) -> DataSource | None:
+    def _resolve_uploaded_source(self, brief: str, owner_user_id: str) -> DataSource | None:
+        """Match a named upload among the caller's own sources; never guess."""
         sources = [
             source
-            for source in self.store.list_sources()
+            for source in self.store.list_sources(owner_user_id)
             if source.source_id != "warehouse-primary" and source.kind.startswith("file")
         ]
         normalized = re.sub(r"[^a-z0-9]", "", brief.lower())
@@ -70,7 +72,7 @@ class Investigator:
             stem = re.sub(r"[^a-z0-9]", "", source.name.rsplit(".", 1)[0].lower())
             if name in normalized or (len(stem) >= 4 and stem in normalized):
                 return source
-        return sources[0] if sources else None
+        return None
 
     @staticmethod
     def _record_excerpt(record: dict) -> str:
@@ -131,8 +133,27 @@ class Investigator:
             source_query_id=query_id,
         )
 
-    async def run(self, investigation_id: str) -> None:
-        investigation = self.store.get_investigation(investigation_id)
+    async def run(self, investigation_id: str, owner_user_id: str) -> None:
+        investigation = self.store.get_investigation(investigation_id, owner_user_id)
+        if not investigation:
+            return
+        sequence = int(investigation.telemetry.get("workflow_runs", 0)) + 1
+        action = "initial investigation" if sequence == 1 else f"refinement {sequence - 1}"
+        existing_session_id = investigation.telemetry.get("galileo_session_id")
+        with investigation_trace(
+            self.settings,
+            investigation_id,
+            action,
+            existing_session_id=existing_session_id,
+        ) as session_id:
+            investigation.telemetry["workflow_runs"] = sequence
+            if session_id:
+                investigation.telemetry["galileo_session_id"] = session_id
+            self.store.save_investigation(investigation)
+            await self._run_workflow(investigation_id, owner_user_id)
+
+    async def _run_workflow(self, investigation_id: str, owner_user_id: str) -> None:
+        investigation = self.store.get_investigation(investigation_id, owner_user_id)
         if not investigation:
             return
         try:
@@ -140,18 +161,20 @@ class Investigator:
             assessment: EvidenceAssessment | None = None
             selected_source = investigation.scope.get("source_id")
             if selected_source and selected_source != "warehouse-primary":
-                source = self.store.get_source(selected_source)
+                source = self.store.get_source(selected_source, owner_user_id)
                 if not source or source.status != "connected":
                     raise ValueError("Select an available connected source")
-                await self._run_uploaded_source(investigation, source)
+                await self._run_uploaded_source(investigation, source, owner_user_id)
                 return
             resolved_product = self._resolve_product(investigation.brief)
             if not resolved_product:
                 uploaded_source = (
-                    self._resolve_uploaded_source(investigation.brief) if not selected_source else None
+                    self._resolve_uploaded_source(investigation.brief, owner_user_id)
+                    if not selected_source
+                    else None
                 )
                 if uploaded_source:
-                    await self._run_uploaded_source(investigation, uploaded_source)
+                    await self._run_uploaded_source(investigation, uploaded_source, owner_user_id)
                     return
                 resolved_product = ("NOVA-X300", "Nova X300")
             product_id, product_name = resolved_product
@@ -175,7 +198,9 @@ class Investigator:
                     {
                         "brief": investigation.brief,
                         "scope": investigation.scope,
-                        "sources": [source.model_dump() for source in self.store.list_sources()],
+                        "sources": [
+                            source.model_dump() for source in self.store.list_sources(owner_user_id)
+                        ],
                         "available_analyses": [
                             "revenue decomposition",
                             "returns and quality signals",
@@ -412,15 +437,18 @@ class Investigator:
             self._event(investigation, "error", "Investigation failed", str(exc))
 
     async def _run_uploaded_source(
-        self, investigation: Investigation, source: DataSource
+        self, investigation: Investigation, source: DataSource, owner_user_id: str
     ) -> None:
-        records = self.store.source_preview(source.source_id, limit=500)
+        records = self.store.source_preview(
+            source.source_id, owner_user_id, limit=500, version_id=source.version_id
+        )
         if not records:
             raise ValueError(f"{source.name} does not contain readable records")
         profile = self._profile_records(records)
         investigation.title = f"{source.name}: source investigation"
         investigation.scope = {
             "source_id": source.source_id,
+            "source_version_id": source.version_id,
             "source_name": source.name,
             "records_profiled": len(records),
             "records_available": source.record_count,
@@ -460,7 +488,11 @@ class Investigator:
                 source_id=source.source_id,
                 title=f"{source.name} · record {index}",
                 excerpt=self._record_excerpt(record),
-                metadata={"record_index": index, "source_sha256": source.metadata.get("sha256")},
+                metadata={
+                    "record_index": index,
+                    "source_version_id": source.version_id,
+                    "source_sha256": source.metadata.get("sha256"),
+                },
             )
             for index, record in enumerate(records[:8], start=1)
         ]

@@ -13,7 +13,7 @@ from fastapi import UploadFile
 from openpyxl import load_workbook
 from pypdf import PdfReader
 
-from .models import DataSource, SourceConnectionRequest
+from .models import DataSource, SourceConnectionRequest, SourceVersion
 
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 SUPPORTED_SUFFIXES = {".csv", ".xlsx", ".pdf", ".docx", ".doc"}
@@ -37,7 +37,9 @@ def connected_source(request: SourceConnectionRequest) -> DataSource:
     )
 
 
-async def ingest_upload(upload: UploadFile, uploads_dir: Path) -> tuple[DataSource, list[dict]]:
+async def ingest_upload(
+    upload: UploadFile, uploads_dir: Path, source_id: str | None = None
+) -> tuple[DataSource, list[dict]]:
     filename = Path(upload.filename or "upload").name
     suffix = Path(filename).suffix.lower()
     if suffix not in SUPPORTED_SUFFIXES:
@@ -48,7 +50,7 @@ async def ingest_upload(upload: UploadFile, uploads_dir: Path) -> tuple[DataSour
     if not content:
         raise SourceIngestionError("The uploaded file is empty")
 
-    source_id = f"file-{uuid4()}"
+    source_id = source_id or f"file-{uuid4()}"
     source_dir = uploads_dir / source_id
     source_dir.mkdir(parents=True, exist_ok=False)
     raw_path = source_dir / filename
@@ -174,48 +176,84 @@ def write_manifest(source: DataSource, records: list[dict], source_dir: Path) ->
     )
 
 
-def archive_source(
-    source: DataSource, records: list[dict], source_dir: Path, bucket_name: str
-) -> DataSource:
-    from google.cloud import storage
+def version_prefix(owner_user_id: str, source_id: str, version_id: str) -> str:
+    """Tenant-scoped object path: users/<user_id>/sources/<source_id>/<version_id>/."""
+    return f"users/{owner_user_id}/sources/{source_id}/{version_id}"
 
-    records_path = source_dir / "records.jsonl"
-    records_path.write_text(
+
+def store_source_version(
+    source: DataSource,
+    records: list[dict],
+    owner_user_id: str,
+    *,
+    bucket_name: str | None,
+    local_root: Path,
+) -> SourceVersion:
+    """Persist the raw file, extracted records and manifest for one immutable version.
+
+    Uses Cloud Storage when a bucket is configured, otherwise the same layout on local disk.
+    The returned object URI is recorded in PostgreSQL; the browser never supplies one.
+    """
+    raw_path = Path(source.metadata.pop("raw_path"))
+    version_id = f"v-{uuid4()}"
+    prefix = version_prefix(owner_user_id, source.source_id, version_id)
+    work_dir = raw_path.parent
+    original = work_dir / f"original{raw_path.suffix.lower()}"
+    raw_path.rename(original)
+    (work_dir / "records.jsonl").write_text(
         "\n".join(json.dumps(record, default=str) for record in records), encoding="utf-8"
     )
-    source.metadata["archive_uri"] = f"gs://{bucket_name}/sources/{source.source_id}/"
-    write_manifest(source, records, source_dir)
-    client = storage.Client()
-    bucket = client.bucket(bucket_name)
-    for path in source_dir.iterdir():
-        blob = bucket.blob(f"sources/{source.source_id}/{path.name}")
-        blob.metadata = {"source_id": source.source_id, "sha256": source.metadata["sha256"]}
-        blob.upload_from_filename(path)
-    return source
+    manifest = {
+        "source": source.model_dump(mode="json", exclude={"version_id"}),
+        "version_id": version_id,
+        "owner_user_id": owner_user_id,
+        "record_count": len(records),
+        "sha256": source.metadata.get("sha256"),
+        "format_version": 2,
+    }
+    (work_dir / "manifest.json").write_text(json.dumps(manifest, indent=2, default=str))
+
+    files = [original, work_dir / "records.jsonl", work_dir / "manifest.json"]
+    if bucket_name:
+        from google.cloud import storage
+
+        bucket = storage.Client().bucket(bucket_name)
+        for path in files:
+            blob = bucket.blob(f"{prefix}/{path.name}")
+            blob.metadata = {
+                "source_id": source.source_id,
+                "version_id": version_id,
+                "owner_user_id": owner_user_id,
+                "sha256": source.metadata["sha256"],
+            }
+            blob.upload_from_filename(path)
+        object_uri = f"gs://{bucket_name}/{prefix}/{original.name}"
+    else:
+        target = local_root / prefix
+        target.mkdir(parents=True, exist_ok=True)
+        for path in files:
+            shutil.copy2(path, target / path.name)
+        object_uri = str(target / original.name)
+    source.metadata["object_uri"] = object_uri
+    return SourceVersion(
+        version_id=version_id,
+        source_id=source.source_id,
+        object_uri=object_uri,
+        sha256=source.metadata.get("sha256"),
+        record_count=len(records),
+        manifest=manifest,
+    )
 
 
-def restore_archived_sources(store, bucket_name: str) -> int:
-    from google.cloud import storage
+def delete_user_objects(owner_user_id: str, *, bucket_name: str | None, local_root: Path) -> None:
+    """Remove every stored object under a user's prefix (tests and account deletion)."""
+    if bucket_name:
+        from google.cloud import storage
 
-    restored = 0
-    client = storage.Client()
-    bucket = client.bucket(bucket_name)
-    for blob in client.list_blobs(bucket, prefix="sources/"):
-        if not blob.name.endswith("/manifest.json"):
-            continue
-        manifest = json.loads(blob.download_as_text())
-        source = DataSource.model_validate(manifest["source"])
-        if store.get_source(source.source_id):
-            continue
-        records_blob = bucket.blob(f"sources/{source.source_id}/records.jsonl")
-        records = [
-            json.loads(line)
-            for line in records_blob.download_as_text().splitlines()
-            if line.strip()
-        ]
-        store.save_source(source, records)
-        restored += 1
-    return restored
+        client = storage.Client()
+        for blob in client.list_blobs(bucket_name, prefix=f"users/{owner_user_id}/"):
+            blob.delete()
+    shutil.rmtree(local_root / "users" / owner_user_id, ignore_errors=True)
 
 
 def verify_bigquery(request: SourceConnectionRequest, billing_project: str) -> dict:

@@ -5,15 +5,16 @@ from sourcelens.models import DataSource
 
 
 @pytest.mark.asyncio
-async def test_reference_quality_scenario_is_investigated(services):
+async def test_reference_quality_scenario_is_investigated(services, make_user):
     store, investigator = services
+    user = make_user()
     investigation = new_investigation(
         "Why did revenue and sentiment decline for Nova X300 in the latest quarter?"
     )
-    store.save_investigation(investigation)
+    store.create_investigation(investigation, user.user_id)
 
-    await investigator.run(investigation.investigation_id)
-    result = store.get_investigation(investigation.investigation_id)
+    await investigator.run(investigation.investigation_id, user.user_id)
+    result = store.get_investigation(investigation.investigation_id, user.user_id)
 
     assert result is not None
     assert result.status == "ready"
@@ -25,10 +26,11 @@ async def test_reference_quality_scenario_is_investigated(services):
 
 
 @pytest.mark.asyncio
-async def test_uploaded_source_is_profiled_and_cited(services):
+async def test_uploaded_source_is_profiled_and_cited(services, make_user):
     store, investigator = services
+    user = make_user()
     source = DataSource(
-        source_id="file-customer-feedback",
+        source_id=f"file-customer-feedback-{user.user_id}",
         name="customer-feedback.csv",
         kind="file.csv",
         record_count=4,
@@ -36,6 +38,7 @@ async def test_uploaded_source_is_profiled_and_cited(services):
     )
     store.save_source(
         source,
+        user.user_id,
         [
             {"region": "North", "sentiment": "negative", "score": "2"},
             {"region": "North", "sentiment": "negative", "score": "1"},
@@ -44,26 +47,28 @@ async def test_uploaded_source_is_profiled_and_cited(services):
         ],
     )
     investigation = new_investigation("What patterns are present in customer-feedback.csv?")
-    store.save_investigation(investigation)
+    store.create_investigation(investigation, user.user_id)
 
-    await investigator.run(investigation.investigation_id)
-    result = store.get_investigation(investigation.investigation_id)
+    await investigator.run(investigation.investigation_id, user.user_id)
+    result = store.get_investigation(investigation.investigation_id, user.user_id)
 
     assert result is not None
     assert result.status == "ready"
     assert result.scope["source_id"] == source.source_id
+    assert result.scope["source_version_id"] == source.version_id
     assert any(item.artifact_id == "source-profile" for item in result.artifacts)
     assert result.evidence[0].source_id == source.source_id
     assert all(finding.evidence_ids for finding in result.findings)
 
 
 @pytest.mark.asyncio
-async def test_action_events_are_persisted(services):
+async def test_action_events_are_persisted(services, make_user):
     store, investigator = services
+    user = make_user()
     investigation = new_investigation("Investigate Nova X300 performance")
-    store.save_investigation(investigation)
-    await investigator.run(investigation.investigation_id)
-    result = store.get_investigation(investigation.investigation_id)
+    store.create_investigation(investigation, user.user_id)
+    await investigator.run(investigation.investigation_id, user.user_id)
+    result = store.get_investigation(investigation.investigation_id, user.user_id)
 
     assert [event.event_type for event in result.events] == [
         "scope",

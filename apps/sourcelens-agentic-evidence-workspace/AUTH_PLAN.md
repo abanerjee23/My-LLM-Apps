@@ -22,6 +22,72 @@ Initial model:
 | Sign-in | Google sign-in first. Anonymous access is removed from protected product routes. |
 | Product data | Existing portfolio/reference data becomes a read-only shared starter source, never another user's private source. |
 
+## Decisions agreed during review (24 September 2026)
+
+These sit on top of the plan below. Where they differ from it, this section wins.
+
+### Additions
+
+1. **Lock down `POST /api/setup/sample`.** It currently lets anyone reset the whole database without signing in. Remove it or restrict it before anything else.
+2. **Stop the agent using an unselected upload.** `_resolve_uploaded_source` in `investigator.py` falls back to the first uploaded source it finds; remove that fallback.
+3. **Testing uses real services:** BigQuery, Qdrant and real model calls.
+4. **Cloud SQL start/stop commands:** `make db-start`, `make db-stop`, `make db-status`.
+5. **`GOOGLE_SERV.md`** records Google Cloud services, costs, constraints, reminders and commands.
+
+### Changes to this plan
+
+1. **No staging environment.** Migration step 8 becomes: enable `AUTH_REQUIRED=true` in production.
+
+### Settled details the plan left open
+
+| Item | Decision |
+| --- | --- |
+| Cloud SQL instance | `sourcelens-db`, PostgreSQL 15, `db-f1-micro`, 10 GB SSD, `us-central1`, daily backups at 03:00 |
+| Database and user | Database `sourcelens`, app user `sourcelens_app` |
+| Database password | Secret Manager secret `sourcelens-db-password`; runtime service account has read access |
+| Cloud Run access | Runtime service account has `roles/cloudsql.client` |
+| Running cost | Instance is stopped when not in use; stopping keeps all data |
+
+### Considered and rejected
+
+- Firestore or Neon instead of Cloud SQL. Cloud SQL stays.
+- A separate test database. Not part of this plan.
+- A "Try as guest" button (Firebase anonymous sign-in). Google sign-in only, as the plan says.
+
+### Deferred
+
+- Per-user model budget and run limits. The budget and run cap stay global for now.
+
+### Resolved
+
+- **Private connection to Cloud SQL (follows the plan).** The instance has a private address (`10.113.0.3`) on the `default` network, and Cloud Run reaches it through Direct VPC egress (`--network=default --subnet=default --vpc-egress=private-ranges-only`). The locked public address is kept so a laptop can run migrations and tests through the authenticated Cloud SQL connector; no networks are allow-listed.
+
+## Implementation record (24 September 2026)
+
+| Plan item | Where |
+| --- | --- |
+| Token verification (`CurrentUser`, `require_user`, signature, issuer, audience, expiry, revocation) | `src/sourcelens/auth.py` |
+| `AUTH_REQUIRED` transition flag: without a token, requests act as the system/demo owner while false | `auth.py`, `config.py` |
+| Schema, ownership columns, indexes, system/demo owner | `migrations/versions/0001_ownership_schema.py` (Alembic) |
+| Owner-scoped store methods; 404 for anything not owned | `src/sourcelens/store.py`, `main.py` |
+| Portfolio records moved to the system/demo owner (2 investigations, 3 usage rows, starter source) | `scripts/import_portfolio_data.py` (`make db-import-portfolio`) |
+| Tenant-scoped raw files `users/<user_id>/sources/<source_id>/<version_id>/` with URI, hash, version, status and owner in PostgreSQL | `sources.py` `store_source_version`, table `source_versions` |
+| Agents see only the owner's sources plus the shared starter source | `investigator.py` |
+| Browser sign-in, fresh token on every call, avatar and sign-out menu | `frontend/src/auth.tsx`, `firebase.ts`, `api.ts`, `App.tsx` |
+| Per-user rate limits on investigations and uploads | `ratelimit.py` (20 investigations and 30 uploads per user per hour) |
+| Audit events (auth failures, access denials, rate limits) without raw tokens | table `audit_events`, `store.audit` |
+| Cross-user test suite, plan cases 1–8 | `tests/test_auth.py` |
+| Production: Cloud SQL over private network, secrets from Secret Manager, `AUTH_REQUIRED=true` | `scripts/deploy_cloud_run.sh` |
+
+Implementation details the plan implied but didn't spell out:
+
+- **Source versions.** Test case 8 needs a later version of an existing source, so `POST /api/sources/{source_id}/versions` uploads one and `GET /api/sources/{source_id}/versions` lists versions with their manifests. Investigations record `source_version_id` in their scope, so notebook snapshots keep the version they used.
+- **`GET /api/me`** returns the verified caller, for the frontend and tests.
+- **Test data.** Tests use the live `sourcelens` database, BigQuery and the raw bucket. Each test creates its own users (`firebase_uid` starting `test-`) and deletes all their rows and stored objects afterwards. Audit rows from tests remain as an audit trail.
+- **Test tokens.** Signed with a test key and checked by the real Firebase Admin SDK; only Google's public-certificate download and the revocation user lookup are replaced.
+- **Removed:** `POST /api/setup/sample` and the start-up restore of every archived source from Cloud Storage; PostgreSQL is the source of truth.
+- **Not done:** Galileo audit export. `GALILEO_*` variables exist in `.env.example`, but Galileo is not wired into the code; audit events go to the `audit_events` table.
+
 ## Target architecture
 
 ```mermaid

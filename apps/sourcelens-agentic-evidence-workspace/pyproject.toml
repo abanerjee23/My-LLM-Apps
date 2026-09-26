@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "Agent-led, evidence-backed business investigation workspace"
 requires-python = ">=3.11"
 dependencies = [
+  "alembic>=1.13.0",
+  "cloud-sql-python-connector[pg8000]>=1.9.0",
   "fastapi>=0.116.0",
+  "firebase-admin>=6.5.0",
+  "galileo>=1.13.0",
   "google-cloud-bigquery>=3.35.0",
   "google-cloud-storage>=3.2.0",
   "httpx>=0.28.0",
@@ -17,6 +21,7 @@ dependencies = [
   "python-dotenv>=1.1.0",
   "python-multipart>=0.0.20",
   "qdrant-client>=1.15.0",
+  "sqlalchemy>=2.0.30",
   "sqlglot>=27.0.0",
   "uvicorn[standard]>=0.35.0",
 ]
@@ -42,6 +47,7 @@ packages = ["src/sourcelens"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
+markers = ["live_model: makes real model calls; run with `make test-live`"]
 
 [tool.ruff]
 line-length = 100

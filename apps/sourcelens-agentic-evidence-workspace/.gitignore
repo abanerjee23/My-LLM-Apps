@@ -8,6 +8,9 @@ data/*.db
 data/raw/
 frontend/node_modules/
 frontend/dist/
+*.tsbuildinfo
+.DS_Store
 coverage.xml
 htmlcov/
 
+.backup/

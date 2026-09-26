@@ -86,6 +86,20 @@ class DataSource(BaseModel):
     record_count: int = 0
     created_at: datetime = Field(default_factory=utc_now)
     metadata: dict[str, Any] = Field(default_factory=dict)
+    version_id: str | None = None
+
+
+class SourceVersion(BaseModel):
+    """One immutable ingestion of a source: raw object, content hash and extracted records."""
+
+    version_id: str
+    source_id: str
+    object_uri: str | None = None
+    sha256: str | None = None
+    record_count: int = 0
+    extraction_status: Literal["extracted", "failed"] = "extracted"
+    ingested_at: datetime = Field(default_factory=utc_now)
+    manifest: dict[str, Any] = Field(default_factory=dict)
 
 
 class Investigation(BaseModel):
@@ -100,6 +114,7 @@ class Investigation(BaseModel):
     evidence: list[Evidence] = Field(default_factory=list)
     events: list[InvestigationEvent] = Field(default_factory=list)
     limitations: list[str] = Field(default_factory=list)
+    telemetry: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime = Field(default_factory=utc_now)
     updated_at: datetime = Field(default_factory=utc_now)
 
@@ -115,6 +130,7 @@ class ReviewRequest(BaseModel):
 class NotebookEntry(BaseModel):
     entry_id: str
     investigation_id: str
+    owner_user_id: str | None = None
     revision: int
     title: str
     saved_at: datetime

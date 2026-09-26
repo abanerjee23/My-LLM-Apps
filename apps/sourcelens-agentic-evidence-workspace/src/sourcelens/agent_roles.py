@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from typing import TypeVar
 
 from pydantic import BaseModel, Field
@@ -98,7 +99,7 @@ class AgentTeam:
         context: dict,
         reasoning: str,
     ) -> OutputT:
-        from agents import Agent, ModelSettings, Runner
+        from agents import Agent, ModelSettings, Runner, custom_span
         from openai.types.shared import Reasoning
 
         if self.store.usage_cost() >= self.settings.sourcelens_model_budget_usd:
@@ -113,7 +114,16 @@ class AgentTeam:
             output_type=output_type,
             instructions=instructions,
         )
-        result = await Runner.run(agent, json.dumps(context, default=str))
+        started = time.perf_counter()
+        # The Investigator owns the top-level trace. Each role is a nested workflow
+        # span, with the Agents SDK's agent and model spans below it.
+        with custom_span(
+            role,
+            data={"investigation_id": investigation_id, "role": role, "model": model},
+            disabled=not self.settings.galileo_enabled,
+        ):
+            result = await Runner.run(agent, json.dumps(context, default=str))
+        duration_ms = round((time.perf_counter() - started) * 1_000)
         output = result.final_output
         if not isinstance(output, output_type):
             raise TypeError(f"{role} did not return {output_type.__name__}")
@@ -125,6 +135,7 @@ class AgentTeam:
             usage.input_tokens,
             usage.output_tokens,
             estimated_cost,
+            duration_ms,
         )
         return output
 
