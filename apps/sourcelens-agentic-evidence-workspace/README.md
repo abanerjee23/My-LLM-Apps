@@ -1,119 +1,216 @@
 # SourceLens
 
-**An agent-led workspace for investigating business performance and customer feedback with evidence you can inspect.**
+**An AI investigation workspace that turns business questions into evidence-backed decisions.**
 
-SourceLens helps a product manager move from a broad business question to a reviewable conclusion. The user selects a source and asks a question; SourceLens scopes the investigation, runs controlled analysis, evaluates competing explanations, retrieves supporting evidence, and produces a structured brief. The user can inspect the work, guide another pass, and save an accepted, edited, or rejected conclusion to a versioned notebook.
+[Try the live product](https://sourcelens-tdghggm6ma-uc.a.run.app) · [Product brief](PRODUCT.md) · [Build and cost plan](BUILD.md) · [Codebase review](CODEBASE_REVIEW.md)
 
-**Live application:** [sourcelens-tdghggm6ma-uc.a.run.app](https://sourcelens-tdghggm6ma-uc.a.run.app)
+SourceLens is a portfolio product built to demonstrate AI product judgment: where an LLM adds value, where deterministic controls are safer, how users verify an answer, and how quality, latency, and cost can be measured in production.
 
-[Product brief](PRODUCT.md) · [Build and cost plan](BUILD.md) · [Codebase review](CODEBASE_REVIEW.md) · [Latest eval artifact](artifacts/evals/portfolio-eval.json)
+## 1. User
 
-## Product position
+The first user is a **product manager investigating a change in customer experience or business performance**. They can frame the decision they need to make, but the relevant evidence may be scattered across sales, inventory, returns, ratings, and customer comments.
 
-The initial user is a product manager investigating a change in customer experience or business performance. The evidence may span sales, inventory, returns, ratings, and customer comments. The user knows the decision they need to inform but may not know which comparisons or follow-up tests will explain the change.
+SourceLens currently runs as a **one-user application** for its owner. The data model is owner-scoped so that multi-user access can be added later without redesigning data isolation.
 
-**Job to be done:** Help me understand what changed, investigate credible explanations, and reach a conclusion I can verify without manually organising every record or directing every analytical step.
+## 2. Problem
 
-SourceLens currently runs as a **one-user portfolio application**. Production access is restricted to one approved Google account. The storage and authorization model remains owner-scoped so the system can support additional accounts later without redesigning data isolation.
+Answering a question such as *“Why did revenue and customer sentiment fall for Nova X300?”* usually requires a PM to:
 
-## Why an agent?
+1. find and join the right data;
+2. decide which explanations are worth testing;
+3. run several quantitative and qualitative checks;
+4. separate evidence from plausible speculation; and
+5. turn the work into a decision-ready narrative.
 
-The model interprets varied language, proposes useful hypotheses, weighs competing explanations, and writes a clear, qualified brief. Deterministic software resolves entities, executes calculations, validates read-only SQL, enforces limits, renders artifacts, persists versions, and maintains provenance.
+General chat tools can produce a fluent answer, but they do not reliably prove which source, query, or customer excerpt supports each claim. Traditional dashboards provide trusted metrics, but the user must already know which cuts of the data to inspect.
 
-The product loop is:
+**Job to be done:** Help me understand what changed, investigate credible explanations, and reach a conclusion I can verify without manually directing every analytical step.
 
-> Ask a question → test explanations → inspect evidence → review the conclusion → retain the decision.
+## 3. Why AI?
 
-This division keeps model judgment where it is useful while preventing the model from inventing source access, calculations, citations, or write operations.
+This problem benefits from AI because the investigation is not a fixed sequence. The system must interpret an open-ended question, propose useful hypotheses, challenge competing explanations, and communicate a qualified conclusion.
 
-## Current experience
+AI does not control the parts that require exactness. Deterministic software resolves sources, validates read-only SQL, executes calculations, enforces limits, stores evidence, and records provenance.
 
-- **Modern conversation workspace:** a focused question composer, source selector, suggested starting points, and a persistent history of investigations.
-- **Visible investigation:** the question, agent activity, calculations, evidence, limitations, and recommended next test remain connected.
-- **Sources:** upload CSV, XLSX, PDF, DOCX, or DOC files, or connect a BigQuery dataset through a guided read-only setup.
-- **Notebook:** accept, edit and accept, or reject a brief; every review saves an immutable snapshot with two user ratings.
-- **Evidence inspection:** quantitative findings link to stored query artifacts and qualitative findings link to exact source excerpts.
+| AI is used for | Deterministic software is used for |
+| --- | --- |
+| Interpreting the user's intent | Authentication and authorization |
+| Planning testable hypotheses | Source and entity resolution |
+| Challenging evidence and identifying gaps | SQL validation and execution |
+| Synthesizing a clear, qualified brief | Calculations, limits, storage, and provenance |
 
-The reference investigation asks why revenue and sentiment declined for Nova X300. SourceLens decomposes the change into units and realised price, compares returns and availability, retrieves customer comments, identifies the strongest supported explanation, and preserves the distinction between association and causation.
+This split lets the model exercise judgment without allowing it to invent source access, calculations, citations, or write operations.
 
-## Architecture
+## 4. Product experience
+
+The core loop is:
+
+> **Ask → investigate → inspect evidence → review → retain the decision**
+
+1. **Connect evidence.** Upload CSV, XLSX, PDF, DOCX, or DOC files, or connect a BigQuery dataset through a guided read-only setup.
+2. **Ask a business question.** Select the relevant source and describe the decision or change to investigate.
+3. **Watch the investigation.** SourceLens plans hypotheses, runs controlled analysis, checks counterevidence, and produces a structured brief.
+4. **Inspect the proof.** Quantitative claims link to stored query artifacts; qualitative claims link to exact source excerpts.
+5. **Apply human judgment.** Accept, edit and accept, or reject the brief. Each review creates an immutable notebook version and captures user ratings.
+
+The reference journey investigates a Q4 2025 revenue and sentiment decline for Nova X300. SourceLens decomposes revenue into units and realised price, compares returns and availability, retrieves customer comments, and distinguishes supported association from causal proof.
+
+## 5. Success criteria
+
+SourceLens is designed to measure product value and operational quality together.
+
+| Outcome | Measure | Current state |
+| --- | --- | --- |
+| Faster investigation | Time from question to reviewable brief | Latency captured per run; benchmark target is the next product milestone |
+| Verifiable conclusions | Material claims linked to inspectable evidence | Implemented for query artifacts and source excerpts |
+| Useful output | User accepts or edits and accepts the brief | Review state and ratings are persisted |
+| Predictable quality | Pass rate on a representative eval set | Historical bounded eval: 5/5; needs rerun after the persistence migration |
+| Controlled economics | Tokens and model cost per completed investigation | Persisted for every successful model call |
+| Reliable operation | Completion, failure, and recovery rates | Events and traces exist; a product dashboard and alerts remain on the roadmap |
+
+The primary product metric should become **accepted investigations with verified evidence**. Latency and cost are guardrail metrics because a high-quality answer that is too slow or expensive will not become a repeated workflow.
+
+## 6. Architecture and data flow
+
+The diagram follows one user question from the interface to a reviewed answer. Numbered blocks correspond to the table below it.
 
 ```mermaid
-flowchart LR
-    UI[React + TypeScript] --> API[FastAPI on Cloud Run]
-    API --> AUTH[Google Identity + SourceLens sessions]
-    API --> STATE[(Cloud SQL PostgreSQL)]
-    API --> INV[Deterministic investigator]
-    INV --> SQL[Validated read-only query adapter]
-    SQL --> BQ[(BigQuery)]
-    SQL --> LDB[(Local fixture)]
-    INV --> RET[Evidence retrieval]
-    RET --> QD[(Qdrant when configured)]
-    RET --> LOCAL[Local lexical fallback]
-    INV --> PLAN[Research Planner / Sol]
-    PLAN --> EVID[Evidence Analyst / Sol]
-    EVID --> LEAD[Lead Investigator / Sol]
-    INV --> GAL[Galileo traces]
-    RAW[(Cloud Storage source versions)] --> STATE
+flowchart TB
+    U([User])
+
+    subgraph EXPERIENCE[Experience]
+        B1["1 · React workspace<br/>Ask, inspect, review"]
+        B2["2 · FastAPI service<br/>Secure product API"]
+        B3["3 · Google sign-in + sessions<br/>Verify owner and protect writes"]
+    end
+
+    subgraph DECISION[Investigation and decision]
+        B4["4 · Workflow controller<br/>Bound scope, state, limits and budget"]
+        B5["5 · Planner · Sol<br/>Create testable hypotheses"]
+        B6["6 · Evidence Analyst · Sol<br/>Challenge findings and find gaps"]
+        B7["7 · Lead Investigator · Sol<br/>Write the qualified brief"]
+        B8["8 · Query + retrieval tools<br/>Calculate and fetch exact evidence"]
+    end
+
+    subgraph DATA[Data and records]
+        B9[("9 · Evidence sources<br/>BigQuery, uploads, Qdrant/local retrieval")]
+        B10[("10 · Product records<br/>Cloud SQL + Cloud Storage")]
+    end
+
+    subgraph OBSERVE[Measurement]
+        B11["11 · Galileo + usage ledger<br/>Traces, spans, latency, tokens and cost"]
+    end
+
+    U -->|A · question and source| B1
+    B1 -->|B · authenticated request| B2
+    B2 -.->|C · identity and CSRF checks| B3
+    B2 -->|D · start investigation| B4
+    B4 -->|E · plan| B5
+    B5 -->|F · hypotheses + test plan| B4
+    B4 -->|G · bounded analysis request| B8
+    B8 -->|H · read-only access| B9
+    B8 -->|I · computed findings + citations| B4
+    B4 -->|J · evidence package| B6
+    B6 -->|K · assessment + gaps| B4
+    B4 -->|L · validated context| B7
+    B7 -->|M · structured brief| B4
+    B4 -->|N · investigation, artifacts and review state| B10
+    B4 -->|O · answer with evidence| B2
+    B2 --> B1
+    B1 --> U
+    B4 -.->|P · workflow and model telemetry| B11
+
+    classDef experience fill:#e8f1ff,stroke:#2563eb,color:#0f172a
+    classDef intelligence fill:#ede9fe,stroke:#7c3aed,color:#0f172a
+    classDef data fill:#ecfdf5,stroke:#059669,color:#0f172a
+    classDef observe fill:#fff7ed,stroke:#ea580c,color:#0f172a
+    class B1,B2,B3 experience
+    class B4,B5,B6,B7,B8 intelligence
+    class B9,B10 data
+    class B11 observe
 ```
 
-### Agent workflow
+**Legend:** blue = user experience and access · purple = investigation logic and AI · green = evidence and persistent records · orange = observability · solid arrows = product data flow · dashed arrows = control or telemetry.
 
-SourceLens uses three bounded OpenAI Agents SDK roles with typed outputs:
+| Block | Explanation |
+| --- | --- |
+| **1 · React workspace** | The user connects a source, asks a question, follows progress, inspects evidence, and reviews the result. |
+| **2 · FastAPI service** | Provides the product API, validates requests, serves the frontend, and returns investigation state and artifacts. |
+| **3 · Google sign-in + sessions** | Verifies the approved Google account, issues an opaque HttpOnly session, and protects state-changing requests with CSRF checks. |
+| **4 · Workflow controller** | Owns investigation state and coordinates each bounded step, including scope, limits, model budget, and persistence. |
+| **5 · Research Planner** | Converts the question and available source catalog into testable hypotheses and a limited investigation plan. |
+| **6 · Evidence Analyst** | Challenges computed findings, looks for counterevidence, states limitations, and recommends the next useful check. |
+| **7 · Lead Investigator** | Combines the plan, calculations, evidence, and caveats into a decision-ready brief with typed output. |
+| **8 · Query + retrieval tools** | Run validated read-only queries and retrieve exact qualitative excerpts. They return evidence references alongside results. |
+| **9 · Evidence sources** | Hold the connected business data: BigQuery tables, uploaded documents and tabular files, plus vector or lexical retrieval indexes. |
+| **10 · Product records** | Cloud SQL stores users, sessions, investigations, reviews, events, and usage. Cloud Storage retains versioned source files and manifests. |
+| **11 · Galileo + usage ledger** | Groups the full multi-agent workflow into one observable session and records spans, latency, tokens, and estimated model cost. |
 
-1. **Research Planner — `gpt-5.6-sol`:** translates the brief and source catalog into testable hypotheses and a bounded plan.
-2. **Evidence Analyst — `gpt-5.6-sol`:** challenges the computed findings, identifies counterevidence and gaps, and recommends the next useful check.
-3. **Lead Investigator — `gpt-5.6-sol`:** synthesizes the validated plan, metrics, findings, and evidence assessment into the decision brief.
+### Agent responsibilities
 
-The current runtime uses Sol for every SourceLens agent and model-backed preparation workflow.
+All model-backed roles currently use `gpt-5.6-sol`.
 
-Python owns the workflow state, source resolution, controlled SQL, calculations, artifacts, evidence references, review state, and persistence. The roles exchange structured outputs instead of an unbounded transcript.
+| Role | Product responsibility | Boundary |
+| --- | --- | --- |
+| Research Planner | Decide what should be tested | Cannot execute arbitrary SQL or claim a finding |
+| Evidence Analyst | Assess support, counterevidence, and gaps | Receives computed evidence rather than unrestricted source access |
+| Lead Investigator | Produce the final decision brief | Must preserve qualifications and evidence references |
 
-### Authentication and ownership
+Python owns workflow state and passes typed outputs between roles. The system does not rely on an unbounded agent transcript as memory.
 
-The browser uses Google Identity Services to obtain a short-lived Google ID credential. The API verifies its issuer, audience, signature, expiry, verified email, and allowed account, then exchanges it for a random SourceLens session:
+## 7. Trust, safety, and failure handling
 
-- The session value is stored only in a `Secure`, `HttpOnly`, `SameSite=Lax` cookie.
-- Only a SHA-256 hash is stored in Cloud SQL.
-- Sessions expire after five days and can be revoked immediately at sign-out.
-- Cookie-authenticated writes require a double-submit CSRF token.
-- Sources, investigations, notebook entries, uploaded objects, and usage records remain owner-scoped.
-- Only `/api/health` is public; product endpoints require an authenticated session.
+- **Evidence before confidence:** findings remain linked to a stored query result or source excerpt; unsupported certainty is treated as a quality failure.
+- **Human review:** the user decides whether a brief is accepted, edited, or rejected. The AI does not make the business decision.
+- **Read-only analysis:** BigQuery access is validated, table-allowlisted, dry-run first, and capped at 10 GiB billed per query.
+- **Prompt injection boundary:** retrieved content is evidence, not an instruction channel. Tools and workflow permissions remain defined in code.
+- **Owner-scoped data:** sources, investigations, notebook entries, usage records, and uploaded objects are isolated by owner.
+- **Graceful degradation:** local lexical retrieval is available when Qdrant is absent, and the product continues if Galileo is unavailable.
+- **Cost protection:** each run has a model budget, live-run ceiling, rate limit, bounded result set, and persisted token and cost records.
 
-The database still contains legacy Firebase naming and a compatibility bearer-token path from the earlier authentication implementation. These are scheduled for removal after the direct Google-session release is verified.
+The main unresolved reliability risk is that investigations run inside the Cloud Run web process. A container restart can interrupt an active run. Durable task execution and stale-run recovery are the highest-priority production hardening items.
 
-### Data and provenance
+## 8. Evaluation and observability
 
-The shared reference warehouse contains generated data for four products:
+One investigation maps to one Galileo session. Each initial run or refinement becomes a workflow trace containing Planner, Evidence Analyst, Lead Investigator, model generations, and nested spans.
 
-| Table | Rows | Purpose |
-| --- | ---: | --- |
-| `products` | 4 | Product identity and pricing |
-| `sales_monthly` | 192 | Monthly channel aggregates |
-| `sales_lines` | 124,747 | Transaction-grain scale data |
-| `inventory_monthly` | 96 | Availability and stockout days |
-| `returns_monthly` | 96 | Returns and quality-coded returns |
-| `feedback` | 1,084 | Ratings, text, themes, provenance, and hashes |
+Cloud SQL also records every successful model call with its role, model, input and output tokens, elapsed time, estimated cost, investigation, and owner. This independent ledger keeps core product metrics available if the tracing vendor is unavailable.
 
-The same version exists as a local deterministic fixture and in BigQuery. Uploaded originals, normalized records, and manifests are retained by owner and source version in Cloud Storage. Notebook snapshots embed the investigation version the user reviewed.
+Latest validation on **26 September 2026**:
 
-## Observability and cost
+- backend integration suite: **40 passed**, with the paid live-model test intentionally skipped;
+- frontend: **7 tests passed**;
+- Python lint, TypeScript, and the Vite production build passed;
+- historical bounded eval: baseline **4/5**, calibrated rerun **5/5**.
 
-Galileo is the external tracing platform. One investigation is a Galileo session; each initial run or refinement is a complete workflow trace containing the Planner, Evidence Analyst, Lead Investigator, model generations, and nested spans.
+The historical eval predates the owner-aware persistence migration. The eval runner needs repair and a broader dataset before the project can claim current end-to-end quality. The [latest saved artifact](artifacts/evals/portfolio-eval.json) remains available for inspection.
 
-Cloud SQL independently records each successful model call with:
+## 9. Product decisions and tradeoffs
 
-- model and role;
-- input and output tokens;
-- elapsed time;
-- estimated model cost;
-- investigation and owner.
+| Decision | Why | Tradeoff |
+| --- | --- | --- |
+| One approved user first | Keeps the portfolio release focused while exercising production authentication | Does not yet prove onboarding or collaboration |
+| Three bounded agent roles | Makes planning, challenge, and synthesis observable and independently evaluable | Adds latency and model cost compared with one call |
+| Sol for every model-backed role | Keeps behavior consistent while quality is being established | Smaller task-specific models could lower cost later |
+| Deterministic analysis tools | Improves reproducibility, provenance, and safety | Arbitrary datasets require more onboarding work |
+| Application-level auth on public Cloud Run | Supports a normal browser sign-in flow | The API must maintain strong session and CSRF controls |
+| Optional Qdrant and Galileo | Core investigations can still complete during dependency outages | Fallback retrieval and local telemetry offer fewer capabilities |
 
-The app keeps working if Galileo is unavailable. Local investigation events and eval JSON remain the portable audit trail. Production logs must never include credentials, raw authentication tokens, or unrestricted source contents.
+## 10. What comes next
 
-Current cost controls include a configurable model budget, live-investigation ceiling, per-user request limits, BigQuery dry runs, a 10 GiB maximum-bytes-billed limit, allowlisted tables, and bounded query results. The current budget ledger is global and should be treated as a portfolio safeguard rather than a general multi-user billing system.
+The next product milestones are ordered by user value and learning:
 
-## Run locally
+1. **Prove reliability:** move work to durable execution, recover interrupted runs, and show clear retry states.
+2. **Measure the experience:** add an authenticated dashboard for completion rate, total latency, per-agent latency, tokens, cost, and review outcomes.
+3. **Strengthen quality evidence:** repair the eval runner, expand representative cases, and compare workflow or model changes before release.
+4. **Make source onboarding useful:** infer schemas and measures for a newly connected BigQuery dataset, then let the user confirm the mapping.
+5. **Close the feedback loop:** use rejection reasons, ratings, refinements, and abandoned runs to prioritize prompt and product changes.
+6. **Prepare for more users only when needed:** add onboarding, user-level quotas, administration, and privacy controls after the single-user workflow proves repeat value.
+
+## 11. Run and validate locally
+
+<details>
+<summary><strong>Local setup</strong></summary>
 
 Prerequisites: Python 3.11+, `uv`, Node 22+, and `gcloud` authenticated as the project owner. Cloud SQL must be running.
 
@@ -127,15 +224,15 @@ npm --prefix frontend run build
 make dev
 ```
 
-In another terminal, run the Vite frontend for live development:
+Run the Vite development server in another terminal:
 
 ```bash
 make frontend
 ```
 
-Open `http://localhost:5173`. `make dev` injects the allowed owner email and retrieves the database password from Secret Manager. Local `.env` supplies the public Google OAuth client ID plus optional OpenAI, Galileo, and Qdrant settings. Never commit `.env`.
+Open `http://localhost:5173`. Never commit `.env`.
 
-Important configuration:
+Key configuration:
 
 ```dotenv
 SOURCELENS_COMPLEX_MODEL=gpt-5.6-sol
@@ -149,7 +246,10 @@ GALILEO_PROJECT=sourcelens
 GALILEO_LOG_STREAM=log-stream-sourcelens
 ```
 
-## Validate
+</details>
+
+<details>
+<summary><strong>Validation commands</strong></summary>
 
 ```bash
 uv run ruff check src tests evals scripts migrations
@@ -158,47 +258,32 @@ npm --prefix frontend test -- --run
 npm --prefix frontend run build
 ```
 
-`make test` intentionally uses Cloud SQL, BigQuery, and Cloud Storage. Tests create owner-scoped records and remove their users and bucket objects afterwards. The paid live-model test is excluded unless explicitly requested:
+`make test` uses Cloud SQL, BigQuery, and Cloud Storage. The paid live-model test is excluded unless explicitly requested:
 
 ```bash
 make test-live
 ```
 
-Latest validation on 26 September 2026:
+</details>
 
-- Backend integration suite: **40 passed**, 1 paid live-model test skipped.
-- Frontend: **7 tests passed**.
-- Python lint, TypeScript, and Vite production build: passed.
-- Historical bounded eval: baseline 4/5, calibrated rerun 5/5. These artifacts predate the owner-aware persistence migration; repair and rerun the eval runner before making a new quality claim.
-
-## Deploy
-
-Cloud Run configuration is defined in `scripts/deploy_cloud_run.sh` and invoked with:
+<details>
+<summary><strong>Cloud Run deployment</strong></summary>
 
 ```bash
 make deploy
 ```
 
-The script verifies the active Google account, checks that Cloud SQL is running, applies migrations, grants the runtime service account its required roles, attaches available secrets, builds the container, and deploys with:
+The deployment script checks the active Google account, applies database migrations, grants the runtime service account its required roles, attaches Secret Manager values, builds the container, and deploys the application with live Sol calls, BigQuery, Cloud Storage, and Galileo configured.
 
-- `AUTH_REQUIRED=true` and one allowed account;
-- live Sol calls enabled;
-- BigQuery and Cloud Storage configured;
-- OpenAI and Galileo keys from Secret Manager;
-- Direct VPC egress to Cloud SQL;
-- zero minimum and one maximum instance;
-- eight concurrent requests per instance.
+</details>
 
-The service is deliberately public at the Cloud Run layer because the application performs its own Google sign-in and session authorization.
+## Current product boundaries
 
-## Current boundaries
-
-- The integrated commerce analysis compares Q3 and Q4 2025. General date parsing is not yet implemented.
-- A newly connected arbitrary BigQuery dataset is verified and sampled for an initial bounded profile; it does not yet receive unrestricted generated SQL.
+- Integrated commerce analysis currently compares Q3 and Q4 2025; general date parsing is not implemented.
+- A new BigQuery dataset is verified and sampled, but it does not yet receive unrestricted generated SQL.
 - Uploaded-source investigations profile at most 500 records and retain bounded excerpts.
-- Investigation work currently runs inside the Cloud Run web process. A restart can interrupt a run; durable task execution or stale-run recovery remains release hardening.
-- Qdrant is optional and the application falls back to deterministic local retrieval when it is unavailable.
-- Usage metrics are persisted but do not yet have an authenticated product dashboard.
-- The run and model-spend ceilings are global portfolio controls. Refinements share the same investigation ID.
+- Usage and review metrics are persisted but do not yet have a product dashboard.
+- Run and spend ceilings are global portfolio safeguards rather than multi-user billing controls.
+- Legacy Firebase naming and a compatibility bearer-token path remain from the previous authentication implementation and should be removed after release verification.
 
-The detailed findings and update sequence are maintained in [CODEBASE_REVIEW.md](CODEBASE_REVIEW.md).
+Detailed engineering findings and the update sequence are maintained in [CODEBASE_REVIEW.md](CODEBASE_REVIEW.md).
