@@ -150,8 +150,9 @@ app.add_middleware(
 async def csrf_protection(request: Request, call_next):
     """Protect cookie-authenticated mutations while preserving token-based API access."""
     origin = request.headers.get("origin")
-    allowed_origins = {str(request.base_url).rstrip("/")}
-    if not request.app.state.settings.sourcelens_secure_cookies and request.url.hostname in {"localhost", "127.0.0.1"}:
+    settings = request.app.state.settings
+    allowed_origins = settings.allowed_origins | {str(request.base_url).rstrip("/")}
+    if not settings.sourcelens_secure_cookies and request.url.hostname in {"localhost", "127.0.0.1"}:
         allowed_origins.add("http://localhost:5173")
     if request.url.path == "/api/auth/session" and origin and origin not in allowed_origins:
         return JSONResponse({"detail": "Sign-in must originate from SourceLens."}, 403)

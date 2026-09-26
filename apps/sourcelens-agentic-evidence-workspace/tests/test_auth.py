@@ -80,6 +80,9 @@ def test_id_token_is_exchanged_for_cookie_session_with_csrf_and_allowlist(
 ):
     alice = make_user("Alice")
     monkeypatch.setattr(settings, "sourcelens_allowed_email", alice.email)
+    monkeypatch.setattr(
+        settings, "sourcelens_allowed_origins", "https://sourcelens.example.run.app"
+    )
     claims = {
         "sub": alice.firebase_uid,
         "email": alice.email,
@@ -90,7 +93,11 @@ def test_id_token_is_exchanged_for_cookie_session_with_csrf_and_allowlist(
     }
     monkeypatch.setattr(auth_module, "verify_google_token", lambda token, config: claims)
 
-    response = client.post("/api/auth/session", json={"id_token": "x" * 100})
+    response = client.post(
+        "/api/auth/session",
+        json={"id_token": "x" * 100},
+        headers={"Origin": "https://sourcelens.example.run.app"},
+    )
     assert response.status_code == 200, response.text
     foreign_origin = client.post(
         "/api/auth/session", json={"id_token": "x" * 100},

@@ -65,6 +65,8 @@ SourceLens uses three bounded OpenAI Agents SDK roles with typed outputs:
 2. **Evidence Analyst — `gpt-5.6-sol`:** challenges the computed findings, identifies counterevidence and gaps, and recommends the next useful check.
 3. **Lead Investigator — `gpt-5.6-sol`:** synthesizes the validated plan, metrics, findings, and evidence assessment into the decision brief.
 
+The current runtime uses Sol for every SourceLens agent and model-backed preparation workflow.
+
 Python owns the workflow state, source resolution, controlled SQL, calculations, artifacts, evidence references, review state, and persistence. The roles exchange structured outputs instead of an unbounded transcript.
 
 ### Authentication and ownership

@@ -36,7 +36,7 @@ React / TypeScript workspace
 
 Cloud Storage: raw snapshots, generated exports, source manifests
 Cloud SQL PostgreSQL: investigations, events, reviews, notebook versions
-Luna preparation worker: structured extraction from feedback
+Sol preparation worker: structured extraction from feedback
 Galileo: evaluation and AI traces
 ```
 
@@ -82,7 +82,7 @@ Generate price sensitivity, product-quality deterioration, inventory constraints
 
 Use versioned Python/SQL source builders for business events and numerical relationships. Generate records in chunks and stage partitioned Parquet in Cloud Storage rather than assembling everything in laptop memory. Bulk-load into BigQuery; partition by relevant dates and cluster by frequently filtered entities where measurements justify it.
 
-Generate a bounded amount of natural-language feedback with Luna, conditioned on business events. Keep scenario identifiers and answer labels out of agent-visible tables, metadata, and retrieval results. Separate evaluation ground truth using permissions, not just prompt instructions. Avoid obvious template repetition and evaluate on held-out data versions.
+Generate a bounded amount of natural-language feedback with Sol, conditioned on business events. Keep scenario identifiers and answer labels out of agent-visible tables, metadata, and retrieval results. Separate evaluation ground truth using permissions, not just prompt instructions. Avoid obvious template repetition and evaluate on held-out data versions.
 
 Persist source-builder version, parameters, object hashes, manifests, and load-job IDs. Retain original exports and subsequent versions for auditability.
 
@@ -90,7 +90,7 @@ Persist source-builder version, parameters, object hashes, manifests, and load-j
 
 ### Agent count and orchestration
 
-The investigation has three OpenAI Agents SDK roles with typed handoffs: a Luna Research Planner, a Luna Evidence Analyst, and a Sol Lead Investigator. Python is the deterministic orchestrator and source of workflow truth. It resolves the scope, runs controlled SQL, retrieves evidence, computes artifacts, validates each role's typed response, and persists the output.
+The investigation has three OpenAI Agents SDK roles with typed handoffs: a Sol Research Planner, a Sol Evidence Analyst, and a Sol Lead Investigator. Python is the deterministic orchestrator and source of workflow truth. It resolves the scope, runs controlled SQL, retrieves evidence, computes artifacts, validates each role's typed response, and persists the output.
 
 The Planner owns hypotheses and analysis direction; the Evidence Analyst owns challenge, counterevidence, gaps, and the next check; the Lead Investigator owns final synthesis. SQL, calculations, provenance, and write operations remain outside model control. Each role is separately observable and costed.
 
@@ -98,8 +98,8 @@ The Planner owns hypotheses and analysis direction; the Evidence Analyst owns ch
 | --- | --- | --- |
 | Interpret brief, plan investigation, construct SQL, compare explanations | `gpt-5.6-sol` | Start at medium reasoning; evaluate high for difficult cases |
 | Reconcile themes, evaluate counterevidence, synthesise cited conclusions | Sol | Bounded calls with structured outputs |
-| Extract themes, sentiment, entities, and evidence spans from feedback | `gpt-5.6-luna` | Start at low reasoning; process only new/changed records |
-| Reference feedback phrasing | Luna | Offline preparation with separate accounting |
+| Extract themes, sentiment, entities, and evidence spans from feedback | `gpt-5.6-sol` | Start at low reasoning; process only new/changed records |
+| Reference feedback phrasing | Sol | Offline preparation with separate accounting |
 | Filtering, maths, schema checks, query enforcement, chart rendering | Python/SQL | No model needed |
 | Production traces and run monitoring | Galileo | Correlate model, tool, cost, latency, errors, and human ratings by investigation ID |
 | Offline quality assessment | Local deterministic checks and calibrated judges | Versioned artifacts; never rely on one automated judge |
@@ -188,9 +188,8 @@ Free tiers may already be consumed by other projects sharing the billing account
 | Model | Uncached input / 1M tokens | Cached input / 1M tokens | Output / 1M tokens |
 | --- | ---: | ---: | ---: |
 | GPT-5.6 Sol | $4.00 | $0.40 | $20.00 |
-| GPT-5.6 Luna | $0.20 | $0.02 | $1.20 |
 
-Sources: [Sol model](https://developers.openai.com/api/docs/models/gpt-5.6-sol), [Luna model](https://developers.openai.com/api/docs/models/gpt-5.6-luna), [API pricing](https://developers.openai.com/api/docs/pricing).
+Sources: [Sol model](https://developers.openai.com/api/docs/models/gpt-5.6-sol), [API pricing](https://developers.openai.com/api/docs/pricing).
 
 Examples assume standard processing, uncached input, no cache-write charges, and requests below the long-context threshold. Published model guidance applies 2× input and 1.5× output rates to the full request when input exceeds 272K tokens. Do not budget only visible answer text: use billed output including reasoning tokens. Retries, repeated conversation input, and tool results also contribute. Fast processing, hosted tools, regional processing premiums, and discounts are excluded. Verify project access before running; model availability in Codex is not proof of API access. Application API spend is separate from a Codex/ChatGPT subscription.
 
@@ -222,26 +221,26 @@ Use this formula for every stage, summed across calls:
 | Stage | Assumed total tokens across the investigation | Cost |
 | --- | --- | ---: |
 | Sol planning, SQL, interpretation, brief | 50,000 input + 10,000 billed output | $0.40 |
-| Optional Luna small-task work | 20,000 input + 3,000 billed output | $0.0076 |
-| **Base total** | Excludes initial corpus extraction and evaluation | **$0.4076** |
+| Optional Sol small-task work | 20,000 input + 3,000 billed output | $0.14 |
+| **Base total** | Excludes initial corpus extraction and evaluation | **$0.54** |
 
 An intensive investigation using 200K total Sol input and 40K billed output costs $1.60 for Sol, provided individual calls stay below the premium threshold. Token totals are workload assumptions to replace with measured traces, not promises. A long agent loop can cost substantially more.
 
 ### One-time or incremental feedback preparation
 
-Assume 600 input tokens and 100 billed output tokens per review on Luna, including amortised instructions. Cost is $0.00024 per record:
+Assume 600 input tokens and 100 billed output tokens per review on Sol, including amortised instructions. Cost is $0.0044 per record:
 
-| Records processed | Luna extraction cost |
+| Records processed | Sol extraction cost |
 | ---: | ---: |
-| 10,000 | $2.40 |
-| 100,000 | $24.00 |
-| 1,000,000 | $240.00 |
+| 10,000 | $44.00 |
+| 100,000 | $440.00 |
+| 1,000,000 | $4,400.00 |
 
 Reprocessing after changing the extraction schema can incur this cost again. Cache by source hash and extraction version. Numeric sales rows need no LLM extraction.
 
-Reference feedback generation, separately: at 200 input + 250 billed output tokens per record, Luna costs $0.00034 each, or $3.40 for 10,000 and $34 for 100,000. Add extraction only when running the pipeline over that generated text. At 10,000 reviews, generation plus extraction is therefore $5.80 before retries. Template-based generation can reduce model spend but may weaken realism; evaluate diversity.
+Reference feedback generation, separately: at 200 input + 250 billed output tokens per record, Sol costs $0.0058 each, or $58 for 10,000 and $580 for 100,000. Add extraction only when running the pipeline over that generated text. At 10,000 reviews, generation plus extraction is therefore $102 before retries. This makes large-scale model generation an explicit future decision; template-based generation is the economical default for the current portfolio dataset.
 
-Fifty ordinary evaluation investigations cost about $20.38 in agent tokens before separate judge calls, SQL, and Galileo charges. Repeated data versions and model comparisons multiply this. Evaluation is an explicit cost centre.
+Fifty ordinary evaluation investigations cost about $27 in agent tokens before separate judge calls, SQL, and Galileo charges. Repeated data versions and model comparisons multiply this. Evaluation is an explicit cost centre.
 
 ## 10. Illustrative monthly budgets
 
@@ -252,7 +251,7 @@ The user has selected a bounded portfolio build: **10–15 total live investigat
 - Keep BigQuery as the actual analytical database and Cloud Storage for original evidence. Running the application locally does not require downloading or analysing the full warehouse locally.
 - Run FastAPI, the worker, React, and a small PostgreSQL instance on the development machine. No Cloud SQL, always-on cloud server, or paid vector cluster initially. Local application storage is suitable for development, not the eventual durable hosted notebook.
 - Start with 100K deterministic sales rows and 1K feedback records, then scale numeric rows after measuring cost. Limit model-generated feedback; numerical data generation does not require LLM calls.
-- Retain Sol for complex analysis and Luna for extraction. Prepare feedback once; reuse it across investigations. Use 5–10 evaluation investigations within the total 10–15 run allocation, with deterministic checks and recorded tool fixtures for routine development. This is a portfolio evaluation, not a comprehensive production certification.
+- Use Sol for every model-backed role and preparation task. Prepare feedback once; reuse it across investigations. Use 5–10 evaluation investigations within the total 10–15 run allocation, with deterministic checks and recorded tool fixtures for routine development. This is a portfolio evaluation, not a comprehensive production certification.
 - Integrate Galileo when the available plan and costs are confirmed. Do not assume a free entitlement. Preserve compatible local traces in the meantime.
 
 | Item | Starting assumption | Estimated cost |

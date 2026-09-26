@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     firebase_project_id: str | None = None
     google_oauth_client_id: str | None = None
     sourcelens_allowed_email: str | None = None
+    sourcelens_allowed_origins: str = ""
     sourcelens_session_days: int = 5
     sourcelens_secure_cookies: bool = False
     sourcelens_session_cookie: str = "sourcelens_session"
@@ -65,6 +66,14 @@ class Settings(BaseSettings):
     @property
     def galileo_enabled(self) -> bool:
         return bool(self.galileo_api_key and self.galileo_project and self.galileo_log_stream)
+
+    @property
+    def allowed_origins(self) -> set[str]:
+        return {
+            origin.strip().rstrip("/")
+            for origin in self.sourcelens_allowed_origins.replace(";", ",").split(",")
+            if origin.strip()
+        }
 
 
 @lru_cache

@@ -277,7 +277,7 @@ The product requirements above take priority over implementation choices. The fo
 | Deployment | Cloud Run container and Cloud Build configuration | Packaged; deployment remains a gated release action. |
 | Authentication | None initially | Explicit scope decision. |
 
-Qdrant serves retrieval, not the sole raw-data archive or transactional system of record. Sol handles complex investigation and Luna handles high-volume extraction; evaluation informs reasoning settings and routing refinements.
+Qdrant serves retrieval, not the sole raw-data archive or transactional system of record. Sol handles every model-backed investigation and preparation role; evaluation informs reasoning settings and routing refinements.
 
 ## 14. Initial scope and boundaries
 
