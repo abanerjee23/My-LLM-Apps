@@ -1,11 +1,20 @@
+# Engine: agents-cli + local Gemini judge, not hosted Arize evaluations.
+# See docs/evaluation.md for commands, dated evidence, privacy and coverage limits.
+# This selection runs only the named metric; custom_metrics is a definition pool.
 metrics_to_run:
   - custom_response_quality
 
 custom_metrics:
-  # Default: local LLM-as-judge (see response_quality.py). Runs in-process via
-  # google-genai on Agent Platform (ADC) or Google AI Studio (GEMINI_API_KEY).
+  # Local Python metric; this path resolves relative to the YAML file.
+  # response_quality.py sends prompt, response, reference and full agent_data
+  # to Gemini 3.7 Flash through google-genai using environment/ADC/API-key routing.
+  # Valid scores are 1-5; missing parsed output returns 0; CLI errors may be null.
+  # No pass threshold or hosted evaluator is configured here. Arize redaction
+  # does not redact local eval artifacts or judge input.
   - name: custom_response_quality
     custom_function_file: response_quality.py
+  # Available diagnostic only, not selected above. Counts conversation turns,
+  # not model calls, specialist hops, tokens or a quality pass rate.
   - name: agent_turn_count
     custom_function: |
       def evaluate(instance):

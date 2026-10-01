@@ -157,6 +157,10 @@ tmp*
 
 # Node
 **/node_modules
+**/.next/
+**/*.tsbuildinfo
+!frontend/src/lib/
+!frontend/src/lib/**
 npm-debug.log
 yarn-error.log
 

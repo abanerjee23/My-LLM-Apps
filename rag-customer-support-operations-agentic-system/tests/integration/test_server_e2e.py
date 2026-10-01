@@ -42,7 +42,8 @@ from requests.exceptions import RequestException
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-BASE_URL = "http://127.0.0.1:8000"
+TEST_SERVER_PORT = int(os.getenv("TEST_SERVER_PORT", "8000"))
+BASE_URL = f"http://127.0.0.1:{TEST_SERVER_PORT}"
 RUN_SSE_URL = BASE_URL + "/run_sse"
 A2A_RPC_URL = BASE_URL + "/a2a/app/"
 AGENT_CARD_URL = A2A_RPC_URL + ".well-known/agent-card.json"
@@ -66,7 +67,7 @@ def start_server() -> subprocess.Popen[str]:
         "--host",
         "0.0.0.0",
         "--port",
-        "8000",
+        str(TEST_SERVER_PORT),
     ]
     env = os.environ.copy()
     env["INTEGRATION_TEST"] = "TRUE"
@@ -92,10 +93,17 @@ def start_server() -> subprocess.Popen[str]:
     return process
 
 
-def wait_for_server(timeout: int = 90, interval: int = 1) -> bool:
+def wait_for_server(
+    timeout: int = 90,
+    interval: int = 1,
+    process: subprocess.Popen[str] | None = None,
+) -> bool:
     """Wait for the server to be ready (agent card requires the lifespan to run)."""
     start_time = time.time()
     while time.time() - start_time < timeout:
+        if process is not None and process.poll() is not None:
+            logger.error("Server process exited with code %s", process.returncode)
+            return False
         try:
             response = requests.get(AGENT_CARD_URL, timeout=10)
             if response.status_code == 200:
@@ -113,7 +121,10 @@ def server_fixture(request: Any) -> Iterator[subprocess.Popen[str]]:
     """Pytest fixture to start and stop the server for testing."""
     logger.info("Starting server process")
     server_process = start_server()
-    if not wait_for_server():
+    if not wait_for_server(process=server_process):
+        if server_process.poll() is None:
+            server_process.terminate()
+            server_process.wait(timeout=10)
         pytest.fail("Server failed to start")
     logger.info("Server process started")
 

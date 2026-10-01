@@ -18,6 +18,11 @@
 from google.adk.apps import App
 
 from app.agents import build_root_agent
+from app.app_utils.observability import setup_arize_observability
+
+# CLI and SDK entry points also need automatic instrumentation. The HTTP server
+# initializes its Google Cloud provider first; setup reuses that provider.
+setup_arize_observability()
 
 root_agent = build_root_agent()
 

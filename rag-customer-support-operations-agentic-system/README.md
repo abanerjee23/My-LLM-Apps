@@ -1,331 +1,202 @@
-# RAG based Customer Support Operations Agentic System
+# Tarnfield Care — policy-grounded customer support
 
-**A policy-grounded support experience that gives customers clear answers while keeping consequential actions under human control.**
+**Portfolio scenario:** Tarnfield Running Co., a fictional running retailer. The app helps customers understand returns, exchanges and billing, then creates durable requests for a human to review when action is needed.
 
-[Build and cost plan](BUILD_PLAN.md) · [Engineering notes](ENGINEERING_NOTES.md)
+**[Open Tarnfield Care — the customer chat app](http://127.0.0.1:3010)**
 
-The reference scenario is Tarnfield Running Co., a fictional running retailer. The product supports returns, exchanges, and billing questions using current policy evidence, customer context, durable action requests, and a private operations workflow for human reviewers.
+This is the product's current entry point. The frontend runs locally on this
+computer and connects to the deployed Google Cloud agent. Start the UI and
+gateway using [Run and verify](#run-and-verify) if they are not already running.
+A public product URL has not been deployed yet.
 
 ## 1. User
 
-The first user is a **customer who needs a trustworthy answer or action without navigating policy documents or repeating their situation**. They want to know what applies to their order, why it applies, and what will happen next.
+| User | Job to be done | Current friction |
+|---|---|---|
+| Customer | Understand eligibility or a charge, and get a clear next step | Rules span several documents; exceptions and order details are hard to interpret |
+| Support reviewer | Make an accountable decision with the relevant evidence | Repeated policy checks, incomplete handoffs and unclear request status |
 
-The second user is a **support reviewer responsible for customer-impacting decisions**. They need a prioritised queue, the relevant order context and policy evidence, a clear audit trail, and control over approval or completion.
-
-The current product serves a fictional retailer with fixture order and billing data. The reviewer experience is configured for one named operator; the workflow and data model are designed so that additional reviewers can be introduced later with stronger identity controls.
+The demonstration uses synthetic orders, products, invoices and charges. It does not connect to a live commerce or payment platform.
 
 ## 2. Problem
 
-Resolving a request such as *“The sole has split after a few weeks—can I exchange these shoes?”* usually requires a support agent to:
+Customers need an answer that applies the correct policy to their situation. A final-sale rule can override the normal return window; a faulty item may require a different path; a pending authorisation can look like a duplicate charge. A generic fluent answer can invent eligibility, promise a refund or lose the handoff.
 
-1. understand the customer’s intent and identify the relevant support area;
-2. find the order, delivery, product, and payment facts;
-3. locate the current policy and any product-specific override;
-4. explain the decision without overstating what the evidence proves; and
-5. create and track a request when human action is required.
-
-General chat assistants can produce fluent answers, but they may rely on model memory, miss policy exceptions, or imply that an action was completed when it was not. Traditional help centres expose the policy but leave the customer to interpret it, while ticketing systems capture work without resolving the question conversationally.
-
-**Job to be done:** Help me understand what applies to my order, show me the evidence, and move any required action into a real human-reviewed workflow without making me repeat the same context.
+The product combines retrieved policy evidence, order context and a persistent review workflow. The intended value is less customer effort and less reviewer lookup time, while preserving human control over consequential actions. Time saved, resolution rate and satisfaction still need a measured pilot.
 
 ## 3. Why AI?
 
-This problem benefits from AI because customers describe the same issue in many ways. The system must interpret intent, choose the relevant specialist, combine policy with order context, and explain the result in clear language.
+An LLM interprets varied customer language, connects the question to policy clauses and explains the result in context. Retrieval gives the model current evidence. These are useful language tasks.
 
-AI does not control the parts that require exactness or authority. Deterministic software performs lookups, calculates dates, scopes retrieval, validates state transitions, creates idempotent action records, and enforces which decisions require a human.
+Deterministic code calculates dates, scopes retrieval, validates request schemas, persists records and controls status transitions. The assistant may file a pending request; it cannot approve, reject or complete one. A human decision remains necessary before customer-impacting work proceeds.
 
-| AI is used for | Deterministic software is used for |
-| --- | --- |
-| Understanding the customer’s request | Order, invoice, charge, and product lookup |
-| Routing to the appropriate specialist | Date calculations and eligibility inputs |
-| Interpreting retrieved policy in context | Document scoping and evidence retrieval boundaries |
-| Explaining a qualified answer clearly | Action creation, state transitions, and audit history |
-| Recalling useful conversational context | Authentication and reviewer permissions |
+## 4. Success criteria
 
-This split lets the model handle language and judgment without allowing it to invent policy, mutate support records outside defined tools, or approve its own work.
+These are proposed product gates and dated evidence, not claims that the app meets every launch requirement.
 
-## 4. Product experience
+| Outcome | Proposed measure | Evidence and limit |
+|---|---|---|
+| Grounded policy decisions | Correct eligibility, supported citations and no invented policy across a held-out suite | Two development cases scored 5/5 on 13 September; broader coverage and release gates remain open |
+| Safe handoffs | No autonomous approval/completion; durable, idempotent pending requests | Workflow tests and a deployed synthetic agent → Firestore → reviewer → status check passed |
+| Responsive chat | Completed-turn p95 ≤15 seconds; track time to first useful text separately | Latest traced turn took 35.14s; another workflow took 143.3s and exceeded the 120s gateway limit. No representative p95 baseline |
+| Conversation continuity | Reliable same-session history and appropriate cross-session recall | Both paths verified; a historical memory write took 8.2s to become searchable |
+| Observable operations | Automatically capture agent/model/tool structure, usage and failures without leaking content | Latest normal frontend turn visible in Arize AX with ten automatic spans and masked payloads |
+| Efficient resolution | Cost per grounded completion, reviewer time, retries, drop-off and customer satisfaction | Collection and a representative pilot remain to be established |
 
-The core loop is:
+The [build plan](BUILD_PLAN.md) expands the acceptance criteria and remaining risks.
 
-> **Ask → verify context → retrieve policy → explain → escalate when needed → track the outcome**
+## 5. UX and interaction design
 
-1. **Ask naturally.** The customer describes a returns, exchange, or billing issue in their own words.
-2. **Resolve the context.** The system gathers the relevant order, delivery, product, invoice, and charge facts.
-3. **Check current policy.** A specialist searches only the policy and catalogue sources relevant to the request.
-4. **Explain the answer.** The customer receives a clear determination with the supporting policy section and any uncertainty stated explicitly.
-5. **Create a real request.** If a refund, exchange, exception, or investigation needs human judgment, the assistant creates a durable Firestore record and returns its reference number.
-6. **Apply human judgment.** An authorised reviewer can assign, approve, reject, request more information, or complete the request in the private Support Operations dashboard.
-7. **Continue without starting over.** Managed sessions preserve the conversation, while Memory Bank can recall useful customer facts across separate conversations.
+The light customer interface provides a responsive chat, saved conversations, new-conversation and search controls, reply copying and policy links. The customer asks questions, manages conversations and decides whether to pursue a handoff. The assistant retrieves evidence and explains its determination. See the [frontend guide](frontend/README.md) for controls, accessibility, storage and failure behaviour.
 
-The reference journey follows a customer reporting a faulty shoe. The assistant checks the order and product rules, retrieves the relevant returns policy, explains the exchange path, creates a support request, and later reports the status stored by the human workflow.
+Policy references help users inspect the basis for an answer. A filed request is **pending review**, not a completed refund or exchange. The separate reviewer dashboard shows request evidence, order facts, assignment, decision notes and audit history. Approval authorises work; completion records that the reviewer reports it happened. No integration executes a payment or fulfilment action.
 
-## 5. Success criteria
+Stop ends the visible stream; it does not guarantee cancellation of work already dispatched to the cloud. After a timeout or interrupted action, reload the conversation and check request status before retrying. The gateway retains its in-flight guard until completion or timeout to reduce duplicate dispatch.
 
-The product is designed to measure customer value, decision safety, and operational usefulness together.
-
-| Outcome | Measure | Current state |
-| --- | --- | --- |
-| Correct, grounded answers | Policy-answer accuracy, citation correctness, and unsupported-claim rate | Initial final-sale and faulty-item cases pass; broader coverage is required |
-| Less customer effort | Repeated-information rate and successful session/memory recall | Same-session continuity and cross-session recall verified live |
-| Safe automation | Consequential actions completed without human approval | Code and workflow prevent the assistant from approving or completing requests |
-| Actionable handoffs | Requests created with sufficient context and evidence | End-to-end agent → Firestore → reviewer → status flow verified |
-| Faster resolution | Time to grounded answer and time to human decision | Instrumented; recent consolidated policy checks took 22–29 seconds |
-| Reliable operation | Completion, retrieval-failure, and storage-failure rates | Honest failure paths exist; production alerting remains incomplete |
-| Controlled economics | Cost per resolved conversation and per reviewed request | Planning model exists; repeated measured distributions remain a next step |
-
-The primary product metric should become **customer requests resolved correctly with traceable policy evidence**. Latency, escalation rate, human overturn rate, and cost per resolution are guardrails: automation is only valuable when it remains trustworthy and operationally affordable.
-
-## 6. Architecture and data flow
-
-The diagram follows one customer request from conversation to a grounded answer or reviewed action. Numbered blocks correspond to the table below it.
+## 6. Agent and system design
 
 ```mermaid
-flowchart TB
-    U([Customer])
-    R([Support reviewer])
-
-    subgraph EXPERIENCE[Experience]
-        B1["1 · Customer conversation<br/>Ask and follow up"]
-        B2["2 · Support Operations dashboard<br/>Review and decide"]
-    end
-
-    subgraph DECISION[Routing and policy judgment]
-        B3["3 · Root agent · Flash<br/>Understand, route, and explain"]
-        B4["4 · Returns & Exchanges specialist · Pro<br/>Determine policy eligibility"]
-        B5["5 · Billing specialist · Pro<br/>Explain charges and refunds"]
-        B6["6 · Bounded tools<br/>Gather facts and scoped evidence"]
-    end
-
-    subgraph DATA[Evidence and workflow state]
-        B7[("7 · Agent Platform RAG<br/>Policy and catalogue evidence")]
-        B8[("8 · Firestore<br/>Support actions and audit history")]
-        B9[("9 · Managed sessions + Memory Bank<br/>Conversation and useful context")]
-    end
-
-    subgraph OPERATE[Runtime and measurement]
-        B10["10 · Agent Runtime<br/>Hosting and execution"]
-        B11["11 · Cloud Logging and Trace<br/>Failures, latency, and operations"]
-    end
-
-    U -->|A · support request| B1
-    B1 -->|B · message| B3
-    B3 -->|C · returns or exchange| B4
-    B3 -->|D · billing| B5
-    B4 -->|E · context request| B6
-    B5 -->|F · context request| B6
-    B6 -->|G · scoped retrieval| B7
-    B7 -->|H · policy evidence| B6
-    B6 -->|I · facts and evidence| B4
-    B6 -->|J · facts and evidence| B5
-    B4 -->|K · sourced determination| B3
-    B5 -->|L · sourced explanation| B3
-    B3 -->|M · grounded response| B1
-    B3 -->|N · pending action| B8
-    R --> B2
-    B2 -->|O · reviewed transition| B8
-    B3 <--> B9
-    B10 --- B3
-    B10 -.-> B11
-    B2 -.-> B11
-
-    classDef experience fill:#e8f1ff,stroke:#2563eb,color:#0f172a
-    classDef intelligence fill:#ede9fe,stroke:#7c3aed,color:#0f172a
-    classDef data fill:#ecfdf5,stroke:#059669,color:#0f172a
-    classDef observe fill:#fff7ed,stroke:#ea580c,color:#0f172a
-    class B1,B2 experience
-    class B3,B4,B5,B6 intelligence
-    class B7,B8,B9 data
-    class B10,B11 observe
+flowchart TD
+    Customer[Customer] --> UI[Local Next.js chat]
+    UI --> Gateway[Server-side Python gateway]
+    Gateway --> Root[Root agent in Google Agent Runtime]
+    Root --> Returns[Returns and Exchanges specialist]
+    Root --> Billing[Billing specialist]
+    Returns --> RAG[(Three policy PDFs in RAG)]
+    Billing --> RAG
+    Root --> Actions[(Firestore support requests)]
+    Returns --> Actions
+    Billing --> Actions
+    Reviewer[Authorised reviewer] --> Ops[Private Cloud Run dashboard]
+    Ops --> Actions
+    Root --- Sessions[(Managed sessions and Memory Bank)]
+    Root -. Automatic ADK instrumentation .-> Arize[Arize AX]
 ```
 
-**Legend:** blue = user and reviewer experience · purple = agent judgment and bounded tools · green = evidence and durable state · orange = runtime and observability · solid arrows = product data flow · dashed arrows = telemetry.
+| Layer | Current choice and purpose |
+|---|---|
+| Customer UI | Next.js, React, TypeScript, Tailwind and Radix primitives for a responsive, accessible chat |
+| Gateway | FastAPI and Google's platform SDK; keeps credentials server-side and bridges managed sessions to streamed replies |
+| Orchestration | Google ADK with explicit specialist `AgentTool` calls; the root retains the customer-facing voice |
+| Models | Root: `gemini-3.8-flash`; specialists: `gemini-3.1-pro-preview`; evaluation judge: `gemini-3.7-flash` |
+| Retrieval | One serverless corpus containing returns, catalogue and billing PDFs; code enforces specialist document scope |
+| State | Managed sessions and Memory Bank in Agent Runtime; Firestore for deployed support actions; SQLite/in-memory paths for local development |
+| Quality evaluation | `agents-cli` generation and a custom Gemini judge with saved local reports |
+| Observability | Automatic OpenInference ADK instrumentation exported to Arize AX; Cloud telemetry for infrastructure diagnosis |
+| Hosting | Deployed Agent Runtime and private Cloud Run reviewer dashboard; local customer UI and gateway |
 
-| Block | Explanation |
-| --- | --- |
-| **1 · Customer conversation** | Accepts natural-language questions and returns grounded answers, references, and status updates. |
-| **2 · Support Operations dashboard** | Gives an authorised reviewer the queue, context, evidence, decisions, and audit timeline. |
-| **3 · Root agent** | Owns the customer interaction, selects a specialist, creates or checks action requests, and communicates the result. |
-| **4 · Returns & Exchanges specialist** | Determines eligibility using order facts, the returns policy, and product-specific catalogue rules. |
-| **5 · Billing specialist** | Explains invoices, payment methods, charges, refunds, and duplicate or pending transactions. |
-| **6 · Bounded tools** | Consolidate required facts, scope each retrieval request, calculate exact values, and expose only defined actions. |
-| **7 · Agent Platform RAG** | Searches the returns policy, product catalogue, and billing policy while preserving source sections. |
-| **8 · Firestore** | Stores idempotent support requests, assignment, decisions, completion state, and the audit history. |
-| **9 · Sessions and Memory Bank** | Preserve the current transcript and useful cross-session customer context; neither is policy evidence. |
-| **10 · Agent Runtime** | Hosts and scales the three-agent application. |
-| **11 · Logging and Trace** | Capture runtime and dashboard telemetry for diagnosis and operational measurement. |
+Returns and Exchanges share one specialist because they use the same rules and order context. Consolidated context tools gather records and scoped policy evidence together. Memory supports continuity but never overrides current policy. Missing retrieval or persistence must produce an honest failure.
 
-### Agent responsibilities
+The latest measured turn made **four model calls**; the number of agents is not the number of calls. An all-Flash experiment is planned only after establishing repeated quality, latency and cost measurements. [Engineering decisions and failure analysis](ENGINEERING_NOTES.md).
 
-The root currently uses `gemini-3.8-flash`; policy specialists use `gemini-3.1-pro-preview`.
+## 7. Evaluation and experimentation
 
-| Role | Product responsibility | Boundary |
-| --- | --- | --- |
-| Root customer-service agent | Understand intent, route work, explain results, and manage request references | Cannot make a policy determination without specialist evidence or approve an action |
-| Returns & Exchanges specialist | Determine eligibility from current policy, product rules, and order context | Can recommend or create a pending request, but cannot approve or complete it |
-| Billing specialist | Explain charges, refunds, invoices, and billing policy | Cannot claim that money moved or a refund completed without stored evidence |
+Quality grading runs through **`agents-cli` and the project's custom Gemini judge**. Migrating observability from Galileo to Arize AI did not replace that engine. Hosted Arize evaluators, experiments, score uploads and automatic case-to-trace correlation are not configured.
 
-Returns and exchanges intentionally remain one specialist because they use the same policy, catalogue rules, and order context. Splitting them would add routing complexity without a clear improvement in customer outcomes.
+The initial dataset contains two development cases: final-sale refusal and a faulty-item exchange handoff. The successful 13 September grading report gave both 5/5, but its `pass_rate` is null. An earlier attempt failed judge authentication; grading the same captured responses after fixing credentials is not evidence of improved agent behaviour. Artifacts are local and ignored by Git.
 
-## 7. Trust, safety, and failure handling
+The latest runtime verification passed **147 Python checks with one opt-in live check skipped**, including **58 focused tracing checks**; Ruff passed. Earlier frontend acceptance passed **30 tests**, TypeScript checks, a production build and dependency audit. These checks cover software behaviour; they do not establish model accuracy across the product.
 
-- **Policy before fluency:** specialists must retrieve current evidence; model memory is never accepted as policy authority.
-- **Human control:** the assistant may create a pending request, but only a reviewer may approve, reject, request information, or complete it.
-- **Evidence before confidence:** customer-facing determinations retain the supporting source section; unsupported certainty is a quality failure.
-- **Deterministic action workflow:** Firestore transitions are validated, idempotent, transactional, and recorded in an audit history.
-- **Scoped retrieval:** each specialist searches only its approved policy documents, reducing irrelevant evidence and cross-domain leakage.
-- **Memory with limits:** remembered customer context may reduce repetition, but it cannot change eligibility or override current policy.
-- **Honest failure:** when policy retrieval or durable storage is unavailable, the assistant says it cannot verify or complete the step.
-- **Private review surface:** the dashboard rejects unauthenticated access and currently maps activity to one configured reviewer.
+The [evaluation runbook](docs/evaluation.md) covers reproducible commands, backend isolation, saved reports, privacy, coverage and proposed release gates. Expand coverage to retrieval failure, conflicting policy, prompt injection, action retries, memory isolation, billing, unsupported intents and latency/cost distributions; retain held-out cases and inspect critical failures individually.
 
-The main unresolved product risks are narrow behavioural coverage, 22–29 second response times for recent policy checks, fixture rather than live commerce data, and incomplete alerting and retention policy. These are release constraints, not details to hide behind a fluent interface.
+**Execution caution:** bare `make eval` uses the configured backend and can create support requests. It does not isolate Firestore. The runbook also explains how an already registered ADK server can defeat new environment overrides. Use a controlled server and synthetic data for a baseline.
 
-## 8. Evaluation and observability
+## 8. Observability: Arize AI
 
-Evaluation is organised around the customer outcomes the product must protect: correct routing, grounded policy interpretation, clear delivery, useful memory, safe action creation, and accurate status reporting.
+The current destination is **Arize AX**, Arize AI's hosted product. Normal ADK execution automatically generates agent, model, tool and chain spans. The integration attaches an exporter to the existing OpenTelemetry provider; application code does not manually construct traces. It exports only the OpenInference ADK scope, avoiding duplicate native Google model usage.
 
-The deterministic suite checks architecture, tool boundaries, state transitions, concurrency, API contracts, and serving behaviour. Live smoke journeys exercise model calls, RAG, memory, and the full human-action workflow. Cloud Logging and Trace provide runtime evidence; the dashboard exposes queue size, overdue work, and decision time.
+On **1 October 2026**, a normal frontend chat through the deployed agent produced trace `ee18fb93d34d639e485828b08573974e` in managed session `3156356794222116864`: status OK, **35.14 seconds**, **11,424 tokens**, and **ten spans** comprising two chains, two agents, four model calls and two tools. The sourced final-sale answer filed no request. This verifies delivery and one successful turn, not general quality or a latency SLA.
 
-Latest validation on **13 September 2026**:
+The Arize key is injected from Secret Manager in the cloud and kept in ignored `.env.local` locally. Content capture is off by default. Arize export masks model/tool payloads and sanitizes content-bearing error details while retaining operational metadata. Native Google telemetry has its own capture configuration and needs its own privacy review.
 
-- automated suite: **50 tests passed**, with one credit-spending integration test intentionally opt-in;
-- initial behavioural eval: **2/2 cases graded 5/5** for final-sale refusal and faulty-item exchange handoff;
-- same-session follow-up correctly recalled the product edition without another lookup;
-- cross-session Memory Bank recall returned the stored email address and first-marathon goal after an observed **8.2-second indexing delay**;
-- a duplicate-charge question was explained as an authorisation hold with billing-policy evidence;
-- the deployed action journey created, assigned, approved, completed, and re-read a real exchange request.
+The [observability guide](docs/observability.md) covers setup, transport proof, deployed evidence and troubleshooting. Alert thresholds, a complete retention/consent policy and hosted Arize quality jobs remain open.
 
-This evidence proves the workflow and its core safety boundaries, not broad production quality. The next evaluation set must add ambiguous requests, conflicting evidence, retrieval outages, duplicate actions, unsafe approval attempts, long conversations, and human overturns.
+## 9. Product iteration and feedback
 
-## 9. Product decisions and tradeoffs
+| Evidence | Decision | Result or next measurement |
+|---|---|---|
+| Weak contrast, vacant space and broken conversation controls | Refine typography/layout and conversation state handling | Frontend acceptance checks passed; usability and task completion still need a pilot |
+| A 143.3s workflow included a 124.7s initial root-model call | Diagnose model and retry time separately from UI time | Automatic traces expose the bottleneck; compare matched model variants under a budget |
+| Native Google model spans duplicated exported usage and exposed content | Restrict Arize export scope and sanitize exported copies | Corrected deployed trace contains ten spans with masked payloads and no duplicate native usage |
+| Consequential actions need accountable review | Persist pending requests, human decisions and audit events | End-to-end synthetic workflow verified; multi-reviewer identity remains a launch requirement |
 
-| Decision | Why | Tradeoff |
-| --- | --- | --- |
-| Three bounded agent roles | Separates customer communication from specialist policy judgment | Adds model calls, latency, and orchestration complexity |
-| Returns and exchanges share one specialist | They depend on the same evidence and order context | A larger policy domain can make prompts and eval coverage broader |
-| Pro specialists and a Flash root | Spend more reasoning capacity on policy interpretation and keep routing/delivery lighter | Mixed-model behaviour is harder to compare and operate |
-| Managed sessions plus Memory Bank | Preserve immediate context and reduce repetition across conversations | Memory is eventually consistent and adds privacy and retention obligations |
-| Firestore for action state | Supports durable, transactional requests and an auditable workflow | Does not execute work in an external commerce system |
-| One named reviewer first | Keeps the human-control boundary real and testable | Does not yet support independent attribution across a support team |
-| Scale-to-zero services | Keeps low-volume operating cost small | Cold starts can increase customer and reviewer latency |
-| Evidence tools consolidate lookups | Reduces tool chatter and repeated model turns | Larger tool responses can increase token use and hide which input drove a conclusion |
+The next feedback loop should connect failed turns, retries, abandonment, reviewer overrides, resolution time and satisfaction to specific changes. A full product analytics funnel is not implemented yet.
 
-At the documented baseline of 1,000 two-turn conversations per month, the planning estimate is **$50–$100 per month**, or roughly **$0.05–$0.10 per conversation**. This is a planning model rather than a billing quote. Model use is the largest cost lever, so the planned all-Flash experiment must compare quality, latency, and cost per resolved conversation rather than optimising token price alone.
+## 10. AI safety and trust
 
-## 10. What comes next
+Implemented controls include scoped retrieval, validated tool inputs, bounded requests, durable idempotent action creation, transactional state changes and a human-only decision boundary. The customer sees sourced explanations and request status rather than a promise that the model completed a refund.
 
-The next product milestones are ordered by user value and learning:
+The frontend's signed anonymous identity is suitable for this demonstration; it is not verified customer authentication or proof of order ownership. The deployed dashboard admits Cloud Run IAM invokers and maps them to one configured reviewer. Independently attributable multiple reviewers require IAP or equivalent trusted identity and a defined role model.
 
-1. **Strengthen quality evidence:** expand behavioural cases across routing, retrieval, explanation, memory, and action safety, including human-reviewed holdouts.
-2. **Reduce response time:** measure repeated latency distributions, identify retrieval and model bottlenecks, and test whether an all-Flash configuration preserves answer quality.
-3. **Close the reviewer feedback loop:** measure approval, rejection, requested-information, completion, and human-overturn patterns to find weak automation boundaries.
-4. **Improve operational readiness:** define alerts, retention rules, policy-ingestion ownership, and recovery procedures for retrieval or storage failures.
-5. **Add reviewer identity when needed:** introduce IAP or an equivalent identity-aware layer before expanding beyond one operator.
-6. **Connect real systems deliberately:** replace order and billing fixtures only after the approval, rollback, idempotency, and audit contracts are proven against a commerce API.
+Before a customer launch, validate prompt-injection and abuse cases, citation correctness, cross-user isolation, policy freshness, content retention and consent, access revocation and rate/quota limits. Keep secrets out of browsers, datasets and shared reports. Local evaluation reports contain full content even when Arize export is masked.
 
-## 11. Run and validate locally
+## 11. Production, operations and cost
 
-<details>
-<summary><strong>Local setup</strong></summary>
+The Google project is `gemini-enterprise-learning`; the agent is in `us-central1`:
 
-Prerequisites: Python 3.11–3.13, `uv`, `agents-cli`, `gcloud` with Application Default Credentials, and access to the configured Google Cloud project and RAG corpus.
+```text
+projects/823305428259/locations/us-central1/reasoningEngines/3469440221970432000
+```
+
+Agent Runtime retains **zero minimum and ten maximum instances**. Scale-to-zero readiness does not mean an instance is always warm.
+
+For internal support operations, the latest [private Cloud Run reviewer service](https://support-ops-dashboard-tdghggm6ma-uc.a.run.app/ops/) is `support-ops-dashboard`, ready revision `support-ops-dashboard-00004-nt7` as checked on 1 October 2026. Staff access requires authentication; direct browser access returns Forbidden. The [operations access and recovery guide](docs/deployment.md#open-the-private-cloud-run-dashboard) contains the reviewer proxy instructions. Customers use the chat app linked at the top of this README.
+
+See [deployment and recovery](docs/deployment.md) for secret bindings, service ownership and release checks. Existing manually provisioned resources need reconciliation/import before Terraform can manage them safely.
+
+The latest trace's model-cost estimate was **$0.019899 for one turn**. It excludes infrastructure, memory generation, evaluation and Arize plan charges; it is not a bill or a representative cost per conversation. The [cost guide](docs/costs.md) explains the measured sample, explicit planning assumptions, current model rates and service cost drivers.
+
+The remaining launch work includes public customer hosting, verified identities and ownership checks, broader quality gates, a measured latency baseline, operational alerts, retention ownership, CI/CD and a rehearsed rollback. This is a working portfolio MVP with documented evidence and limits.
+
+## 12. Portfolio evidence
+
+The product demonstrates policy-grounded delegation, deterministic action safety, durable human review, conversation continuity and automatic observability. September checks verified same-session recall, cross-session Memory Bank recall, billing explanation and a complete synthetic review workflow. October checks verified the customer frontend and deployed Arize delivery.
+
+The evidence supports those specific behaviours. It does not yet establish broad answer accuracy, real commerce execution, an uptime SLA, customer satisfaction or an acceptable p95. The documentation records the tradeoffs and next experiments needed to establish them.
+
+## Run and verify
+
+Use Python 3.11–3.13, `uv`, Node/npm, Google Cloud CLI and an authorised Google project. Install the existing CLI line and locked dependencies:
 
 ```bash
-uv tool install google-agents-cli~=1.5.0
+uv tool install 'google-agents-cli~=1.5.0'
+uv sync --locked --extra eval --extra lint
+cp -n .env.example .env
+cp -n .env.local.example .env.local
+chmod 600 .env.local
 gcloud auth application-default login
-uv sync
-cp .env.example .env
-touch .env.local
 ```
 
-Keep non-secret configuration in `.env`:
+Fill non-secret project/corpus settings in `.env` and local keys in `.env.local`; preserve existing files when resuming this project. Do not put actual keys in templates or deployment-facing `.env`. For live frontend chat, configure the current runtime via ignored `deployment_metadata.json` or `DEPLOYED_AGENT_RUNTIME_ID` as described in the [frontend guide](frontend/README.md).
 
-```dotenv
-GOOGLE_GENAI_USE_VERTEXAI=false
-GOOGLE_CLOUD_PROJECT=<your project>
-GOOGLE_CLOUD_LOCATION=global
-RAG_CORPUS_LOCATION=us-central1
-```
-
-Put the local Gemini developer key only in `.env.local`:
-
-```dotenv
-GEMINI_API_KEY=<your local key>
-```
-
-`agents-cli deploy` reads `.env` and turns its entries into Agent Runtime environment variables. Keeping the developer key in `.env.local` prevents it from bypassing Secret Manager during deployment. Never commit either active file.
-
-Start the local experience:
+Run each server in its own terminal:
 
 ```bash
-make rag-status
-make rag-up
-make playground
+npm --prefix frontend ci
+make chat-gateway
+make chat-ui
 ```
 
-The playground is available at `/dev-ui/?app=app`.
+Open **[Tarnfield Care](http://127.0.0.1:3010)**. `make playground` provides the alternative ADK development interface on port 8080 with local SQLite sessions. Run `make rag-status` to inspect corpus readiness before live questions. If the corpus is missing, review `make rag-up` before ingestion; RAG mode changes are project-wide infrastructure operations.
 
-</details>
+| Check | Command and scope |
+|---|---|
+| Python regression suite | `ARIZE_ENABLED=false TEST_SERVER_PORT=8088 make test`; one billed live check stays opt-in |
+| Frontend verification | `npm --prefix frontend test`, `npm --prefix frontend run typecheck`, `npm --prefix frontend run build` |
+| Automatic Arize transport | `uv run python scripts/arize_trace_smoke.py`; deterministic ADK execution, real exporter, no model bill |
+| Live Arize smoke | Add `--real`; spends model credits and uses live retrieval |
+| Behavioural baseline | Follow the [evaluation runbook](docs/evaluation.md); control backend isolation and synthetic action writes |
+| Deployed action workflow | `make deployed-action-smoke`; real cloud calls and synthetic Firestore mutations, not a read-only check |
 
-<details>
-<summary><strong>Validation commands</strong></summary>
+## Documentation map
 
-```bash
-make test
-make eval
-```
-
-The following commands call live services and may spend credits:
-
-```bash
-make smoke
-make memory-smoke
-make deployed-action-smoke
-```
-
-The RAG corpus must exist before grounded policy checks or behavioural evaluation can succeed.
-
-</details>
-
-<details>
-<summary><strong>Private reviewer dashboard</strong></summary>
-
-Start an authenticated local proxy with the Google account that has reviewer access:
-
-```bash
-gcloud run services proxy support-ops-dashboard \
-  --project=<your-project-id> \
-  --region=us-central1 \
-  --port=8090
-```
-
-Open `http://127.0.0.1:8090/ops/`. Anonymous calls to the Cloud Run service are rejected.
-
-</details>
-
-<details>
-<summary><strong>Agent Runtime deployment</strong></summary>
-
-```bash
-unset GOOGLE_APPLICATION_CREDENTIALS
-gcloud config set project <your-project-id>
-agents-cli deploy
-```
-
-Production secrets belong in Secret Manager. [BUILD_PLAN.md](BUILD_PLAN.md) records product decisions and acceptance criteria; [ENGINEERING_NOTES.md](ENGINEERING_NOTES.md) contains platform-specific implementation details.
-
-</details>
-
-## Current product boundaries
-
-- Order, invoice, product, and billing records are fixtures rather than a live commerce integration.
-- The behavioural dataset contains only two initial product cases and cannot support a broad quality claim.
-- Recent consolidated policy journeys took 22–29 seconds, above the proposed 15-second target.
-- Memory Bank is eventually consistent; the observed indexing delay was 8.2 seconds in the latest live check.
-- The private dashboard supports one configured reviewer identity; team-level attribution requires IAP or an equivalent control.
-- The dashboard polls every 15 seconds and is not designed as a high-volume real-time operations centre.
-- Firestore and related IAM resources were initially provisioned manually; the Terraform declarations must be imported into state before a full apply.
-- No commerce API executes an approved refund, exchange, or billing correction. Completion is explicitly recorded by a human reviewer.
-- Cost estimates are planning assumptions until repeated production-like traffic provides measured distributions.
-
-Detailed outcomes, cost assumptions, and acceptance criteria are maintained in [BUILD_PLAN.md](BUILD_PLAN.md).
+| Document | Purpose |
+|---|---|
+| [Build plan](BUILD_PLAN.md) | Product scope, targets, tradeoffs, stages and launch gaps |
+| [Engineering notes](ENGINEERING_NOTES.md) | Implemented design, incidents, fixes and known constraints |
+| [Frontend guide](frontend/README.md) | Local chat, controls, failure handling and hosting boundary |
+| [Evaluation guide](docs/evaluation.md) | Reproducible generation/grading, evidence, isolation and coverage |
+| [Dataset guide](tests/eval/datasets/README.md) | Case schema, expectations and baseline limits |
+| [Observability guide](docs/observability.md) | Automatic Arize AX tracing, privacy, verification and diagnosis |
+| [Deployment guide](docs/deployment.md) | Current cloud links, authenticated access, updates and recovery |
+| [Cost guide](docs/costs.md) | Rates, measured usage, assumptions and cost controls |

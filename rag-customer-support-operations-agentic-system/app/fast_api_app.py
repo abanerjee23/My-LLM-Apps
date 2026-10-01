@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import asyncio
 import contextlib
 import os
 from collections.abc import AsyncIterator
@@ -23,6 +24,10 @@ from google.adk.runners import Runner
 
 from app.app_utils import services
 from app.app_utils.a2a import attach_a2a_routes
+from app.app_utils.observability import (
+    setup_arize_observability,
+    shutdown_arize_observability,
+)
 from app.app_utils.reasoning_engine_adapter import (
     attach_reasoning_engine_routes,
 )
@@ -40,6 +45,9 @@ AGENT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # get_fast_api_app has already initialized Google Cloud telemetry. Attach
+    # Arize to that provider before any runner starts, rather than replacing it.
+    setup_arize_observability()
     from app.agent import app as adk_app
     from app.agent import root_agent
 
@@ -61,7 +69,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         task_store=InMemoryTaskStore(),
         rpc_path=f"/a2a/{adk_app.name}",
     )
-    yield
+    try:
+        yield
+    finally:
+        try:
+            await runner.close()
+        finally:
+            # Export queued spans outside the event loop after runner cleanup.
+            await asyncio.to_thread(shutdown_arize_observability)
 
 
 app: FastAPI = get_fast_api_app(
