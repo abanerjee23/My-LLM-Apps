@@ -21,13 +21,3 @@ output "logs_bucket_name" {
   description = "Logs storage bucket name"
   value       = google_storage_bucket.logs_data_bucket.name
 }
-
-output "support_ops_dashboard_service_account" {
-  description = "Least-privilege identity used by the reviewer dashboard"
-  value       = google_service_account.support_ops_dashboard.email
-}
-
-output "support_ops_dashboard_url" {
-  description = "Private Support Operations dashboard URL"
-  value       = google_cloud_run_v2_service.support_ops_dashboard.uri
-}

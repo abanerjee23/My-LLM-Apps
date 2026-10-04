@@ -1,8 +1,11 @@
 # Engineering Notes
 
+> Historical implementation evidence for the legacy support product. The
+> agreed replacement and its gates are in [the build plan](build-plan.md).
+
 **Last verified:** 1 October 2026.
 
-[BUILD_PLAN.md](BUILD_PLAN.md) defines user value, measured evidence, proposed gates and
+[BUILD_PLAN.md](build-plan.md) defines user value, measured evidence, proposed gates and
 remaining decisions. This file records implementation boundaries and the failures that informed
 them. The current system includes the deployed Agent Runtime, private Cloud Run reviewer
 dashboard, and a local Next.js customer chat on port 3010 through a gateway on port 8081.
@@ -70,7 +73,7 @@ produced trace `ee18fb93d34d639e485828b08573974e`, managed session
 root duration and 11,424 tokens. Model/tool content was masked and native usage was
 not duplicated. An earlier local live smoke took 19.294 seconds and all ten spans
 were accepted. These are individual delivery samples, not a p95 latency claim.
-See [configuration, verification and rollout](docs/observability.md).
+See [configuration, verification and rollout](observability.md).
 
 ### Explicit specialist AgentTools (BUILD_PLAN §4)
 
@@ -413,7 +416,7 @@ BigQuery is intentionally deferred until history size or analytical complexity m
 useful.
 
 The current URL, IAM verification, authenticated local proxy and update/rollback steps are
-documented in [the deployment guide](docs/deployment.md). Anonymous `/ops/` access returns 403;
+documented in [the deployment guide](deployment.md). Anonymous `/ops/` access returns 403;
 the customer UI should never be linked as if it were hosted on this Cloud Run service.
 
 Cloud resources were provisioned manually during the live build and also declared in Terraform.
@@ -439,7 +442,7 @@ evals.
 - Latency remains above the proposed 15-second p95 gate. The latest corrected frontend trace
   took 35.14 seconds; a separate 143.3-second workflow included a 124.7-second initial root call
   and exceeded the gateway's 120-second turn limit. No repeated latency or cost baseline exists.
-  [The cost guide](docs/costs.md) gives planning assumptions, not a measured production bill.
+  [The cost guide](costs.md) gives planning assumptions, not a measured production bill.
 - Default masking at the Arize export boundary does not change original native Cloud spans.
   Review native capture settings, retention and access separately before handling real data.
 - Export monitoring, alert thresholds, policy-ingestion ownership and retention/consent are
@@ -479,4 +482,4 @@ Only known policy documents may become source chips. Explicit source-labelled na
 to a **Referenced policy** link; this is not a fabricated excerpt or retrieval verification.
 New conversation creates a real managed session and titles it from its first message. Drafts
 survive switching during the browser session; messages are not stored in browser local storage.
-Production setup, UX acceptance evidence and launch gaps are in [frontend/README.md](frontend/README.md).
+Production setup, UX acceptance evidence and launch gaps are in [frontend guide](frontend.md).

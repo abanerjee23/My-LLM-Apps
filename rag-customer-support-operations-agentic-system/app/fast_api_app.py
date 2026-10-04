@@ -31,7 +31,6 @@ from app.app_utils.observability import (
 from app.app_utils.reasoning_engine_adapter import (
     attach_reasoning_engine_routes,
 )
-from app.dashboard_api import router as dashboard_router
 
 allow_origins = (
     os.getenv("ALLOW_ORIGINS", "").split(",") if os.getenv("ALLOW_ORIGINS") else None
@@ -90,7 +89,6 @@ app: FastAPI = get_fast_api_app(
 )
 app.title = "customer-chatbot-rag"
 app.description = "API for interacting with the Agent customer-chatbot-rag"
-app.include_router(dashboard_router)
 
 # Proxy routes so the Vertex AI Console Playground (reasoning_engine SDK) can
 # talk to this agent alongside the native adk_api routes.

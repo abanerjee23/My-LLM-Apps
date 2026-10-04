@@ -19,28 +19,45 @@ from opentelemetry.trace import StatusCode
 from scripts import arize_trace_smoke as smoke
 
 
-def _outbound_span(*, attributes=None, events=(), description=None, links=(), scope=smoke.ADK_SCOPE):
+def _outbound_span(
+    *, attributes=None, events=(), description=None, links=(), scope=smoke.ADK_SCOPE
+):
     """Metadata fake for validation boundaries; not an instrumentation proof."""
     return SimpleNamespace(
         attributes={"openinference.span.kind": "LLM", **(attributes or {})},
         instrumentation_scope=SimpleNamespace(name=scope),
-        events=events, links=links, status=SimpleNamespace(description=description),
+        events=events,
+        links=links,
+        status=SimpleNamespace(description=description),
     )
 
 
-@pytest.mark.parametrize("key", [
-    "input.value", "output.value", "llm.invocation_parameters",
-    "llm.input_messages.0.message.content", "llm.output_messages.0.message.content",
-    "tool.parameters", "gen_ai.tool.call.arguments", "gcp.vertex.agent.llm_request",
-    "metadata", "customer-private-field",
-])
+@pytest.mark.parametrize(
+    "key",
+    [
+        "input.value",
+        "output.value",
+        "llm.invocation_parameters",
+        "llm.input_messages.0.message.content",
+        "llm.output_messages.0.message.content",
+        "tool.parameters",
+        "gen_ai.tool.call.arguments",
+        "gcp.vertex.agent.llm_request",
+        "metadata",
+        "customer-private-field",
+    ],
+)
 def test_capture_disabled_rejects_payload_fields_without_exposing_values(key):
-    report = smoke.privacy_report([_outbound_span(attributes={key: "private-customer-data"})])
+    report = smoke.privacy_report(
+        [_outbound_span(attributes={key: "private-customer-data"})]
+    )
     assert report["privacy_passed"] is False
     assert "private-customer-data" not in repr(report)
 
 
-@pytest.mark.parametrize("key", ["exception.message", "exception.stacktrace", "message", "tool.arguments"])
+@pytest.mark.parametrize(
+    "key", ["exception.message", "exception.stacktrace", "message", "tool.arguments"]
+)
 def test_capture_disabled_rejects_exception_event_payloads(key):
     event = SimpleNamespace(name="exception", attributes={key: "private-error-details"})
     report = smoke.privacy_report([_outbound_span(events=[event])])
@@ -66,7 +83,15 @@ def test_capture_disabled_rejects_error_description_nonexception_events_and_link
 def test_safe_redacted_errors_keep_only_operational_metadata():
     span = _outbound_span(
         attributes={"input.value": smoke.REDACTED_VALUE, "llm.token_count.total": 12},
-        events=[SimpleNamespace(name="exception", attributes={"exception.type": "RuntimeError", "exception.escaped": True})],
+        events=[
+            SimpleNamespace(
+                name="exception",
+                attributes={
+                    "exception.type": "RuntimeError",
+                    "exception.escaped": True,
+                },
+            )
+        ],
         links=[SimpleNamespace(attributes={})],
     )
     assert smoke.privacy_report([span])["privacy_passed"] is True
@@ -98,7 +123,9 @@ def test_outbound_guard_rejects_unsafe_batch_before_sdk_transport():
 
 
 @pytest.mark.asyncio
-async def test_smoke_fails_on_outbound_privacy_even_if_export_counters_claim_success(monkeypatch, capsys):
+async def test_smoke_fails_on_outbound_privacy_even_if_export_counters_claim_success(
+    monkeypatch, capsys
+):
     from app.app_utils import observability
 
     spans = []
@@ -115,7 +142,9 @@ async def test_smoke_fails_on_outbound_privacy_even_if_export_counters_claim_suc
     monkeypatch.setattr(observability, "flush_arize_observability", lambda: True)
     monkeypatch.setattr(observability, "shutdown_arize_observability", lambda: None)
     snapshots = iter([{}, {"attempted_spans": 4, "successful_spans": 4}])
-    monkeypatch.setattr(observability, "get_arize_export_diagnostics", lambda: next(snapshots))
+    monkeypatch.setattr(
+        observability, "get_arize_export_diagnostics", lambda: next(snapshots)
+    )
 
     def reject_sdk_network(*args):
         raise AssertionError("Unsafe payload must never reach the real SDK transport.")
@@ -154,7 +183,7 @@ async def test_adk_generates_agent_model_and_tool_spans_without_manual_spans():
     assert result["mode"] == "deterministic_transport"
     assert result["reply"].startswith("Transport smoke only:")
     assert result["root_tool_calls"] == ["read_smoke_order"]
-    assert result["isolated_support_requests"] == 0
+    assert "isolated_support_requests" not in result
     assert report["required_span_kinds_present"] is True
     assert report["span_kinds"]["LLM"] == 2
     assert report["model_calls"] == 2
@@ -198,7 +227,10 @@ def test_success_is_based_on_only_new_successful_exported_spans():
     ],
 )
 def test_partial_or_failed_export_is_not_reported_as_accepted(after, flushed):
-    assert smoke.export_report({}, after, flush_completed=flushed)["collector_accepted"] is False
+    assert (
+        smoke.export_report({}, after, flush_completed=flushed)["collector_accepted"]
+        is False
+    )
 
 
 def test_read_only_smoke_fixture_excludes_customer_and_payment_data():
@@ -210,7 +242,9 @@ def test_read_only_smoke_fixture_excludes_customer_and_payment_data():
 
 
 @pytest.mark.asyncio
-async def test_production_helper_redacts_automatic_nested_agent_and_tool_content(monkeypatch):
+async def test_production_helper_redacts_automatic_nested_agent_and_tool_content(
+    monkeypatch,
+):
     from openinference.instrumentation.google_adk import GoogleADKInstrumentor
 
     from app import agents
@@ -226,10 +260,14 @@ async def test_production_helper_redacts_automatic_nested_agent_and_tool_content
                 for content in llm_request.contents
                 for part in content.parts or []
             )
-            part = types.Part(text="Private root answer.") if delegated else types.Part(
-                function_call=types.FunctionCall(
-                    name="returns_exchanges",
-                    args={"request": smoke.FINAL_SALE_QUESTION},
+            part = (
+                types.Part(text="Private root answer.")
+                if delegated
+                else types.Part(
+                    function_call=types.FunctionCall(
+                        name="returns_exchanges",
+                        args={"request": smoke.FINAL_SALE_QUESTION},
+                    )
                 )
             )
             yield LlmResponse(content=types.Content(role="model", parts=[part]))
@@ -238,7 +276,8 @@ async def test_production_helper_redacts_automatic_nested_agent_and_tool_content
         specialist = smoke.build_transport_agent()
         specialist.name = "returns_exchanges"
         return LlmAgent(
-            name="customer_service", model=RoutingLlm(),
+            name="customer_service",
+            model=RoutingLlm(),
             instruction="Delegate to the returns specialist.",
             tools=[AgentTool(agent=specialist)],
         )
@@ -270,10 +309,15 @@ async def test_production_helper_redacts_automatic_nested_agent_and_tool_content
         assert report["span_kinds"]["TOOL"] == 2
         assert report["message_tool_content_redacted"]
         assert "TF-88213" not in repr([span.attributes for span in generated])
-        assert "Private root answer." not in repr([span.attributes for span in generated])
+        assert "Private root answer." not in repr(
+            [span.attributes for span in generated]
+        )
         assert "test-only-key" not in repr([span.attributes for span in generated])
         assert len(exported.get_finished_spans()) == report["span_count"]
-        assert observability.get_arize_export_diagnostics()["successful_spans"] == report["span_count"]
+        assert (
+            observability.get_arize_export_diagnostics()["successful_spans"]
+            == report["span_count"]
+        )
     finally:
         observability.shutdown_arize_observability()
         if instrumentor.is_instrumented_by_opentelemetry:
@@ -282,7 +326,9 @@ async def test_production_helper_redacts_automatic_nested_agent_and_tool_content
 
 
 @pytest.mark.asyncio
-async def test_production_helper_sanitizes_real_adk_generated_failure_spans(monkeypatch):
+async def test_production_helper_sanitizes_real_adk_generated_failure_spans(
+    monkeypatch,
+):
     from openinference.instrumentation.google_adk import GoogleADKInstrumentor
 
     from app.app_utils import observability
@@ -294,7 +340,11 @@ async def test_production_helper_sanitizes_real_adk_generated_failure_spans(monk
             raise RuntimeError("private-customer-error-details")
             yield  # pragma: no cover - retain ADK's async-generator contract
 
-    monkeypatch.setattr(smoke, "build_transport_agent", lambda: LlmAgent(name="failure_smoke", model=FailingLlm()))
+    monkeypatch.setattr(
+        smoke,
+        "build_transport_agent",
+        lambda: LlmAgent(name="failure_smoke", model=FailingLlm()),
+    )
     monkeypatch.setenv("ARIZE_ENABLED", "true")
     monkeypatch.setenv("ARIZE_CAPTURE_CONTENT", "false")
     monkeypatch.setenv("ARIZE_API_KEY", "test-only-key")
@@ -318,8 +368,13 @@ async def test_production_helper_sanitizes_real_adk_generated_failure_spans(monk
         assert spans
         assert any(span.status.status_code is StatusCode.ERROR for span in spans)
         assert smoke.privacy_report(spans)["privacy_passed"]
-        assert "private-customer-error-details" not in repr([(span.attributes, span.events, span.status.description) for span in spans])
-        assert any(span.status.description or span.events for span in originals.get_finished_spans())
+        assert "private-customer-error-details" not in repr(
+            [(span.attributes, span.events, span.status.description) for span in spans]
+        )
+        assert any(
+            span.status.description or span.events
+            for span in originals.get_finished_spans()
+        )
     finally:
         observability.shutdown_arize_observability()
         if instrumentor.is_instrumented_by_opentelemetry:

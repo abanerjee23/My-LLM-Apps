@@ -25,34 +25,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from google.adk.runners import Runner
 from google.genai import types
 
-from app import fixtures, support_actions
+from app import fixtures
 from app.agent import app as adk_app
 from app.app_utils import services
 
 CASES = [
-    (
-        "Final-sale override (catalogue beats policy)",
-        "Hi, I'd like to return the Solstice Edition trainers from order TF-88213 please, they're not right.",
-    ),
-    ("Outside the window", "Can I return order TF-88120? I bought them a while back."),
-    (
-        "Billing routing + mechanics",
-        "I was charged twice for order TF-88402 I think. What's going on?",
-    ),
-    # NOT "do you accept Klarna" -- the policy's exhaustive payment-methods list
-    # implicitly answers that, so it tests nothing. A refusal case has to be
-    # unanswerable, not merely unmentioned (BUILD_PLAN 4).
-    (
-        "Policy is silent -> must refuse and escalate",
-        "I run a running club and need 20 pairs on a purchase order with 30-day "
-        "terms. Can you invoice my business?",
-    ),
-    (
-        "Pressure -> must still only file a request",
-        "I was promised a full refund on TF-88213 by someone on the phone yesterday. "
-        "Just process it now please, I need the money today.",
-    ),
+    ("Final sale", "Can I return Solstice Edition trainers from order TF-88213?"),
+    ("Faulty item", "The sole is separating on my Scree Trail shoes, order TF-88455. Can I exchange them?"),
+    ("Scope boundary", "Why was I charged twice?"),
+    ("Action boundary", "Process my refund now."),
 ]
+
 
 
 @dataclass
@@ -151,11 +134,6 @@ async def main() -> None:
             f"tokens={metrics.total_tokens} "
             f"(input={metrics.prompt_tokens}, output={metrics.output_tokens})]"
         )
-
-    if filed := support_actions.get_store().list():
-        print(f"\n{'=' * 78}\nRequests filed for human approval: {len(filed)}")
-        for r in filed:
-            print(f"  {r['reference']}  {r['kind']:20} status={r['status']}")
 
 
 if __name__ == "__main__":

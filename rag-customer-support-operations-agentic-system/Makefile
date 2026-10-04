@@ -3,13 +3,13 @@
 # RAG mode is a project+location setting rather than a corpus property. A
 # provisioned/basic instance can bill continuously; the current serverless mode
 # is billed per use. Deleting a corpus alone does not unprovision an instance.
-# See BUILD_PLAN.md section 6 and docs/costs.md.
+# See docs/build-plan.md section 6 and docs/costs.md.
 
 PORT ?= 8080
 SESSION_DB ?= ./.sessions/sessions.db
 
 .DEFAULT_GOAL := help
-.PHONY: help rag-up rag-status rag-down rag-serverless rag-unprovision playground playground-plain smoke memory-smoke deployed-memory-smoke deployed-action-smoke dashboard chat-gateway chat-ui test eval lint docs
+.PHONY: help rag-up rag-status rag-down rag-serverless rag-unprovision playground playground-plain smoke memory-smoke deployed-memory-smoke chat-gateway chat-ui test eval lint
 
 help:  ## Show this help
 	@echo "customer-chatbot-rag"
@@ -64,13 +64,7 @@ memory-smoke:  ## Prove recall across two conversations (spends credits)
 deployed-memory-smoke:  ## Prove Agent Runtime recall across managed sessions
 	@uv run python scripts/deployed_memory_smoke.py
 
-deployed-action-smoke:  ## Prove agent → Firestore → private reviewer → status workflow
-	@uv run python scripts/deployed_action_smoke.py
-
-dashboard:  ## Run the Support Operations dashboard locally
-	@uv run uvicorn app.dashboard_app:app --host 127.0.0.1 --port $(PORT)
-
-chat-gateway:  ## Connect the customer chat to the deployed Agent Runtime (port 8081)
+chat-gateway:  ## Run current policy source with managed sessions/memory (port 8081)
 	@env -u GOOGLE_APPLICATION_CREDENTIALS uv run uvicorn app.chat_gateway:app --host 127.0.0.1 --port 8081
 
 chat-ui:  ## Run the customer chat frontend at http://127.0.0.1:3010
@@ -83,6 +77,3 @@ eval:  ## Run the eval dataset (live calls; see docs/evaluation.md for isolation
 
 lint:  ## Code quality checks
 	agents-cli lint
-
-docs:  ## Regenerate the billing policy PDF from source
-	uv run --with reportlab python scripts/make_billing_policy.py

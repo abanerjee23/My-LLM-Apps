@@ -53,7 +53,8 @@ def _files(client, corpus_name):
 
 
 def _policy_pdfs() -> list[Path]:
-    pdfs = sorted(p for p in DOCS_DIR.glob("*.pdf") if not p.name.startswith("."))
+    pdfs = sorted(DOCS_DIR / name for name in config.RETURNS_POLICY_DOCS
+                  if (DOCS_DIR / name).is_file())
     if not pdfs:
         sys.exit(f"No PDFs in {DOCS_DIR}. Drop the policy documents there first.")
     return pdfs

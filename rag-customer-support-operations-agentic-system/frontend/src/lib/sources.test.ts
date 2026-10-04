@@ -14,13 +14,10 @@ test("restored answers recognise the live Returns and Exchanges source wording",
   assert.equal(result[0].excerpt, undefined);
 });
 
-test("recognises named returns, billing and catalogue source aliases", () => {
+test("recognises returns/catalogue aliases and excludes billing", () => {
   const examples = [
     ["Source: Returns & Exchanges Policy — Section 1", "tarnfield_returns_policy.pdf"],
     ["Source: Returns Policy — Section 1", "tarnfield_returns_policy.pdf"],
-    ["Source: Tarnfield Billing and Payments Policy — Section 4", "tarnfield_billing_policy.pdf"],
-    ["Source: Billing & Payments Policy — Section 4", "tarnfield_billing_policy.pdf"],
-    ["Source: Billing Policy — Section 4", "tarnfield_billing_policy.pdf"],
     ["Source: Tarnfield Product Catalogue — final-sale item", "tarnfield_product_catalogue.pdf"],
     ["Source: Tarnfield Product Catalog — final-sale item", "tarnfield_product_catalogue.pdf"],
   ];
@@ -53,7 +50,7 @@ test("ordinary policy mentions are not presented as named citations", () => {
 test("handles Markdown source labels, plural lists and multiple policies without duplicates", () => {
   const content = "**Source:** Tarnfield Returns and Exchanges Policy — Section 1\n\n**Sources**:\n- Billing and Payments Policy\n- Product Catalog\n\nSource: Returns & Exchanges Policy — Section 2";
   assert.deepEqual(answerSources({ content }).map((item) => item.document), [
-    "tarnfield_returns_policy.pdf", "tarnfield_product_catalogue.pdf", "tarnfield_billing_policy.pdf",
+    "tarnfield_returns_policy.pdf", "tarnfield_product_catalogue.pdf",
   ]);
 });
 

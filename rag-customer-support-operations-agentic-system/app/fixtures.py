@@ -1,4 +1,4 @@
-"""Read deterministic demonstration order and billing data."""
+"""Read synthetic, privacy-minimal order context for policy demonstrations."""
 
 from __future__ import annotations
 
@@ -27,18 +27,6 @@ def _load() -> dict[str, Any]:
 
 def get_order(order_id: str) -> dict[str, Any] | None:
     return _load()["orders"].get(order_id.strip().upper())
-
-
-def get_invoice(invoice_id: str) -> dict[str, Any] | None:
-    return _load()["invoices"].get(invoice_id.strip().upper())
-
-
-def get_customer(customer_id: str) -> dict[str, Any] | None:
-    return _load()["customers"].get(customer_id.strip().upper())
-
-
-def billing_events(order_id: str) -> list[dict[str, Any]]:
-    return _load()["known_billing_events"].get(order_id.strip().upper(), [])
 
 
 def days_since_delivery(order: dict[str, Any]) -> int | None:

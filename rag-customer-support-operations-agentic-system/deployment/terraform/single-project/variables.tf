@@ -29,21 +29,6 @@ variable "region" {
   default     = "us-central1"
 }
 
-variable "firestore_location" {
-  type        = string
-  description = "Firestore location for durable support actions. This cannot be changed after creation."
-  default     = "us-central1"
-}
-
-variable "dashboard_image" {
-  type        = string
-  description = "Versioned Artifact Registry image for the Support Operations dashboard."
-}
-
-variable "dashboard_reviewer_email" {
-  type        = string
-  description = "Google account allowed to invoke and act as the single reviewer in the initial MVP."
-}
 
 variable "telemetry_logs_filter" {
   type        = string

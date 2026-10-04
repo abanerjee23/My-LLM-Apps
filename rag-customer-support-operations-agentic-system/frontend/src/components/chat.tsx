@@ -11,12 +11,11 @@ import { answerSources, policyDocuments, type Source } from "@/lib/sources";
 
 type Message = { id: string; role: "user" | "assistant"; content: string; sources?: Source[]; error?: string; pending?: boolean; stopped?: boolean; recover?: boolean };
 type Conversation = { id: string; title: string; updatedAt: string };
-type SupportRequest = { reference: string; kind: string; orderId: string };
 
 const starters = [
   { title: "Check a return", description: "Solstice Edition trainers", prompt: "Can I return my Solstice Edition shoes from order TF-88213?", icon: "return" },
   { title: "Find an exchange", description: "A fault with my running shoes", prompt: "The sole is separating on my Scree Trail shoes, order TF-88455. Can I exchange them?", icon: "exchange" },
-  { title: "Understand a charge", description: "Two charges on my order", prompt: "Why do I see two charges for order TF-88402?", icon: "billing" },
+  { title: "Understand the window", description: "How long do I have?", prompt: "How long do I have to return unworn trainers?", icon: "return" },
 ];
 function BrandMark({ small = false }: { small?: boolean }) {
   return <span className={small ? "brand-mark small" : "brand-mark"} aria-hidden="true"><svg viewBox="0 0 32 32" fill="none"><path d="m9 8-4 16h5l4-16zm8 0-4 16h5l4-16zm8 0-4 16h5l4-16z" fill="currentColor" /></svg></span>;
@@ -44,7 +43,7 @@ async function responseError(response: Response): Promise<RequestFailure> {
     if (typeof body.error?.message === "string") return new RequestFailure(body.error.message, retryable, typeof body.error.conversationId === "string" ? body.error.conversationId : undefined, body.error.active === true);
     if (typeof body.detail === "string") return new RequestFailure(body.detail, retryable);
   } catch { /* Fall back to a safe, actionable message. */ }
-  return new RequestFailure("The assistant is temporarily unavailable. Reload the conversation before repeating an action request.");
+  return new RequestFailure("The assistant is temporarily unavailable. Reload the conversation before trying again.");
 }
 
 function Markdown({ children }: { children: string }) {
@@ -59,7 +58,6 @@ function Markdown({ children }: { children: string }) {
 
 export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [supportRequests, setSupportRequests] = useState<SupportRequest[]>([]);
   const [ready, setReady] = useState(false);
   const [bootstrapError, setBootstrapError] = useState(false);
   const [mobile, setMobile] = useState(false);
@@ -191,7 +189,7 @@ export function Chat() {
         if (recoveryId && (recoveryId === conversationId || !conversationId)) {
           if (!conversationId) selectConversation(recoveryId);
           setMessages(Array.isArray(body.messages) ? body.messages : []);
-          setSupportRequests(Array.isArray(body.supportRequests) ? body.supportRequests : []);
+
         }
         stopRecoveryPending.current = false; setInFlight(false); setFlightConversationId(null); setAnnouncement(recoveryId ? "The previous request has finished. Conversation updated." : "The previous request has finished. Check conversation history for its answer.");
         void refreshConversations();
@@ -238,7 +236,7 @@ export function Chat() {
       // Invalidate an older list fetch before adding the just-created session.
       listRequest.current += 1; setLoadingList(false); setHistoryError(null);
       setConversations((previous) => [{ id: body.conversationId, title: body.title || "New conversation", updatedAt: new Date().toISOString() }, ...previous.filter((item) => item.id !== body.conversationId)]);
-      setMessages([]); setSupportRequests([]); setDraft(""); setSearch(""); setSearchOpen(false); setSidebarOpen(false); setNearBottom(true); setInFlight(false); setFlightConversationId(null);
+      setMessages([]);  setDraft(""); setSearch(""); setSearchOpen(false); setSidebarOpen(false); setNearBottom(true); setInFlight(false); setFlightConversationId(null);
       setAnnouncement("New conversation created. Write a message to get started.");
       window.requestAnimationFrame(() => { sidebar.current?.querySelector(".history-list")?.scrollTo({ top: 0 }); input.current?.focus(); });
     } catch (error) {
@@ -265,7 +263,7 @@ export function Chat() {
       selectConversation(id); setMessages(Array.isArray(body.messages) ? body.messages : []); setDraft(drafts.current.get(id) || ""); setNearBottom(true); setInFlight(body.active === true);
       if (body.inFlight === true) setFlightConversationId(id);
       if (body.active === false) setFlightConversationId(null);
-      setSupportRequests(Array.isArray(body.supportRequests) ? body.supportRequests : []);
+
       if (typeof body.title === "string") setConversations((items) => items.map((item) => item.id === id ? { ...item, title: body.title } : item));
       setAnnouncement(body.inFlight ? "Your previous response is still finishing. Reload again shortly." : "Conversation loaded.");
       window.requestAnimationFrame(() => input.current?.focus());
@@ -317,16 +315,15 @@ export function Chat() {
           if (retryable) setDraft((current) => current || text);
           setAnnouncement(error);
         }
-        if (type === "supportRequests" && Array.isArray(data.supportRequests)) setSupportRequests(data.supportRequests as SupportRequest[]);
         if (type === "done") update((message) => ({ ...message, pending: false }));
       });
-      if (!failed && !answered) throw new Error("No answer came back. Reload this conversation to check its status before repeating an action request.");
+      if (!failed && !answered) throw new Error("No answer came back. Reload this conversation to check its status before trying again.");
       if (!failed) setAnnouncement("The assistant’s answer is ready.");
     } catch (error) {
       failed = true;
       const stopped = controller.signal.aborted;
       const retryable = !stopped && error instanceof RequestFailure && error.retryable;
-      const message = stopped ? "Display stopped. The assistant may still finish your request. Reload this conversation to check the answer before repeating an action." : error instanceof Error ? error.message : "The assistant couldn’t finish this response. Reload the conversation before repeating an action.";
+      const message = stopped ? "Display stopped. The assistant may still finish your request. Reload this conversation to check the answer before trying again." : error instanceof Error ? error.message : "The assistant couldn’t finish this response. Reload the conversation before trying again.";
       update((reply) => ({ ...reply, pending: false, error: message, stopped, recover: !retryable }));
       if (retryable) setDraft((current) => current || text);
       if (stopped) { stopRecoveryPending.current = true; setInFlight(true); setFlightConversationId(streamConversationId); }
@@ -355,9 +352,9 @@ export function Chat() {
     <form className="composer" onSubmit={(event) => { event.preventDefault(); void send(); }}>
       <label className="sr-only" htmlFor="message-input">Message Tarnfield care</label>
       <textarea id="message-input" ref={input} value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ask about a return, exchange or charge…" rows={2} maxLength={6000} disabled={loadingHistory || creatingConversation} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} />
-      <div className="composer-bottom"><span className="composer-hint">{draft.length > 5500 ? `${6000 - draft.length} characters left` : <><MessageSquare size={15} /><span>{busy ? "Checking your request" : !ready ? "Connecting to Tarnfield care…" : "Policy answers. People make the decisions."}</span></>}</span>{busy ? <Button type="button" className="stop-button" size="icon" variant="outline" onClick={() => abort.current?.abort()} aria-label="Stop displaying response"><Square size={15} fill="currentColor" /></Button> : <Button className="send-button" type="submit" size="icon" aria-label="Send message" disabled={!draft.trim() || loadingHistory || creatingConversation || inFlight || !ready}><ArrowUp size={22} /></Button>}</div>
+      <div className="composer-bottom"><span className="composer-hint">{draft.length > 5500 ? `${6000 - draft.length} characters left` : <><MessageSquare size={15} /><span>{busy ? "Checking your request" : !ready ? "Connecting to Tarnfield care…" : "Returns and exchanges, explained with policy sources."}</span></>}</span>{busy ? <Button type="button" className="stop-button" size="icon" variant="outline" onClick={() => abort.current?.abort()} aria-label="Stop displaying response"><Square size={15} fill="currentColor" /></Button> : <Button className="send-button" type="submit" size="icon" aria-label="Send message" disabled={!draft.trim() || loadingHistory || creatingConversation || inFlight || !ready}><ArrowUp size={22} /></Button>}</div>
     </form>
-    <div className="composer-footer"><p>AI can make mistakes. Check the sources. Action requests need human review.</p><span className="keyboard-hint"><kbd>↵</kbd> send · <kbd>Shift ↵</kbd> new line</span></div>
+    <div className="composer-footer"><p>AI can make mistakes. Check the sources. Policy guidance only. No actions are taken.</p><span className="keyboard-hint"><kbd>↵</kbd> send · <kbd>Shift ↵</kbd> new line</span></div>
   </div>;
 
   return <div className="chat-shell">
@@ -382,7 +379,7 @@ export function Chat() {
 
       <div className={`transcript-scroll ${empty ? "empty-scroll" : ""}`} ref={scroll} onScroll={(event) => { const el = event.currentTarget; setNearBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 110); }}>
         {loadingHistory ? <div className="loading-conversation" role="status"><LoaderCircle className="spinner" size={20} />Loading your conversation</div> : empty ? <section className="welcome" aria-labelledby="welcome-title">
-          <div className="welcome-intro"><div><p className="welcome-eyebrow">TARNFIELD CARE</p><h1 id="welcome-title">Back to your run.</h1><p className="welcome-description">Help with returns, exchanges and billing.<br />Ask a question. We’ll find your next step.</p></div><RouteArtwork /></div>
+          <div className="welcome-intro"><div><p className="welcome-eyebrow">TARNFIELD CARE</p><h1 id="welcome-title">Back to your run.</h1><p className="welcome-description">Help with returns and exchanges.<br />Ask a question. We’ll find your next step.</p></div><RouteArtwork /></div>
           {composer}
           <div className="starter-section"><div className="starter-heading">Try a demo order</div><div className="starters">{starters.map((item) => <button className="starter" key={item.title} onClick={() => void send(item.prompt)} disabled={busy || !ready || loadingHistory || creatingConversation || inFlight}><span className={`starter-symbol ${item.icon}`} aria-hidden="true">{item.icon === "return" ? <svg viewBox="0 0 24 24" fill="none"><path d="M7 8H4V5M4 8l4-4a7 7 0 1 1-2 11" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg> : item.icon === "exchange" ? <svg viewBox="0 0 24 24" fill="none"><path d="M4 8h16m-4-4 4 4-4 4M20 16H4m4-4-4 4 4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg> : <svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="3" stroke="currentColor" strokeWidth="1.5" /><path d="M3 10h18M7 15h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" /></svg>}</span><span className="starter-copy"><strong>{item.title}</strong><small>{item.description}</small></span><ArrowRight size={16} /></button>)}</div></div>
         </section> : <div className="transcript" aria-label={currentTitle || "Current conversation"}>
@@ -397,7 +394,6 @@ export function Chat() {
               {message.role === "assistant" && message.content && !message.pending && <div className="message-actions"><button className="plain-icon" aria-label={copied === message.id ? "Answer copied" : "Copy answer"} onClick={() => void copyMessage(message)}>{copied === message.id ? <Check size={14} /> : <Copy size={14} />}</button>{copied === message.id && <span>Copied</span>}</div>}
             </div>
           </article>)}
-          {supportRequests.length > 0 && <section className="recorded-requests" aria-label="Recorded support requests"><p>Recorded support requests</p>{supportRequests.map((request) => <div key={request.reference}><span><FileText size={15} /><strong>{request.reference}</strong></span><button disabled={busy || !ready} onClick={() => void send(`What is the latest status of support request ${request.reference}?`)}>Check status<ArrowRight size={14} /></button></div>)}</section>}
         </div>}
       </div>
 
@@ -407,7 +403,7 @@ export function Chat() {
       <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</div>
     </main>
 
-    <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent><div className="dialog-emblem"><ShieldCheck size={23} /></div><DialogTitle className="dialog-title">Helpful answers. Clear boundaries.</DialogTitle><DialogDescription className="dialog-description">Tarnfield care checks our policy documents to help with returns, exchanges and billing.</DialogDescription><div className="help-points"><p><strong>People handle the decisions.</strong> The assistant can file a support request; a human must approve and complete it. Filing a request does not mean a refund or exchange has happened.</p><p><strong>This is a portfolio demo.</strong> Tarnfield is a fictional retailer. Orders are sample data, and no real refund or replacement is issued.</p><p><strong>Continuity in this browser.</strong> Your conversations are linked to a browser cookie. This is not a verified customer account. Don’t share sensitive personal or payment information.</p></div><div className="policy-links"><span>Read the policy documents</span>{policyDocuments.map((item) => <a href={`/policies/${item.document}`} target="_blank" rel="noopener noreferrer" key={item.document}><FileText size={16} />{item.title}<ExternalLink size={14} /></a>)}</div></DialogContent></Dialog>
+    <Dialog open={helpOpen} onOpenChange={setHelpOpen}><DialogContent><div className="dialog-emblem"><ShieldCheck size={23} /></div><DialogTitle className="dialog-title">Helpful answers. Clear boundaries.</DialogTitle><DialogDescription className="dialog-description">Tarnfield care checks our policy documents to help with returns and exchanges.</DialogDescription><div className="help-points"><p><strong>Policy guidance only.</strong> The assistant explains returns and exchanges with policy evidence. It cannot issue refunds, arrange exchanges or file support requests.</p><p><strong>This is a portfolio demo.</strong> Tarnfield is a fictional retailer. Orders are sample data, and no real refund or replacement is issued.</p><p><strong>Continuity in this browser.</strong> Your conversations are linked to a browser cookie. This is not a verified customer account. Don’t share sensitive personal or payment information.</p></div><div className="policy-links"><span>Read the policy documents</span>{policyDocuments.map((item) => <a href={`/policies/${item.document}`} target="_blank" rel="noopener noreferrer" key={item.document}><FileText size={16} />{item.title}<ExternalLink size={14} /></a>)}</div></DialogContent></Dialog>
     <Dialog open={!!source} onOpenChange={(open) => { if (!open) setSource(null); }}><DialogContent><div className="dialog-emblem"><FileText size={23} /></div><DialogTitle className="dialog-title">{source?.title || "Policy source"}</DialogTitle><DialogDescription className="dialog-description">{source?.kind === "referenced" ? "Referenced in the assistant’s answer. Open the policy to verify the source and any exceptions." : "Policy evidence checked for this response."}</DialogDescription>{source?.excerpt ? <blockquote className="source-excerpt">{source.excerpt}</blockquote> : <p className="source-note">Read the original policy for the complete terms and exceptions.</p>}{source && policyDocuments.some((item) => item.document === source.document) && <Button variant="outline" asChild><a href={`/policies/${source.document}`} target="_blank" rel="noopener noreferrer"><FileText size={16} />Open policy PDF<ExternalLink size={14} /></a></Button>}</DialogContent></Dialog>
   </div>;
 }

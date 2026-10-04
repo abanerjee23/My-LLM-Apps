@@ -1,5 +1,22 @@
 # Coding Agent Guide
 
+## Product direction and repository organisation
+
+- Abhinav is an aspiring AI PM. Product documents must use plain language and
+  explain user value, measurable outcomes and tradeoffs before implementation details.
+- Keep README.md as the only product Markdown document outside docs/. Put all
+  supporting documentation in docs/; keep tool-discovery instruction files in
+  their required locations. Update links when moving documentation.
+- README sequence: User → Problem → Why AI → Success criteria → UX → System
+  design → Evaluation → Observability → Iteration → Safety → Production/ops →
+  Portfolio evidence. Distinguish measured evidence from proposed targets.
+- The agreed target is one Gemini 3.8 Flash returns/exchanges policy agent with
+  RAG citations, managed sessions and Memory Bank. Read docs/build-plan.md before
+  building. Billing, specialist delegation and Firestore review workflows are
+  legacy capabilities scheduled for removal, not the target product.
+- Judge calibration uses human-labelled good, poor and borderline responses;
+  agent evaluations score fresh outputs. Evals remain planned work.
+
 ## Prerequisites
 
 Install the CLI (one-time):
@@ -18,7 +35,7 @@ Before writing any code, understand the project's requirements, constraints, and
 Implement agent logic in `app/`. Use `make playground` for interactive agent testing with the configured SQLite session and local memory services. Use `make chat-gateway` and `make chat-ui` for the customer frontend connected to the deployed runtime. Iterate based on user feedback; preserve the existing models unless a model change is requested.
 
 ### Phase 3: The Evaluation Loop (Main Iteration Phase)
-Use [the project evaluation guide](docs/evaluation.md). The existing two-case baseline uses `agents-cli` and the custom Gemini judge; Arize AX receives automatic ADK traces. Hosted Arize evaluators are not configured. Agree measurable acceptance criteria, a run budget and held-out cases before a new experiment. Bare `make eval` does not isolate Firestore, and an already registered ADK server can bypass new environment overrides; use the guide's controlled-server baseline. Inspect per-case errors and judge rationales, and compare saved result files after a change. Do not interpret two high scores as broad product quality. Run prompt optimisation only when explicitly requested.
+Use [the project evaluation guide](docs/evaluation.md). The existing two-case baseline uses `agents-cli` and the custom Gemini judge; Arize AX receives automatic ADK traces. Hosted Arize evaluators are not configured. Agree measurable acceptance criteria, a run budget and held-out cases before a new experiment. The legacy dataset is not new-design coverage, and an already registered ADK server can bypass new environment overrides; use the guide's controlled-server baseline. Inspect per-case errors and judge rationales, and compare saved result files after a change. Do not interpret two high scores as broad product quality. Run prompt optimisation only when explicitly requested.
 
 ### Phase 4: Pre-Deployment Tests
 Run `uv run pytest tests/unit tests/integration`. Fix issues until all tests pass.
@@ -34,7 +51,7 @@ Follow [the current deployment runbook](docs/deployment.md). The existing Agent 
 | Command | Purpose |
 |---------|---------|
 | `make playground` | Interactive local agent testing with session and memory services |
-| `make chat-gateway` / `make chat-ui` | Customer chat against the deployed runtime |
+| `make chat-gateway` / `make chat-ui` | Current policy code with managed conversation state |
 | `uv run pytest tests/unit tests/integration` | Run unit and integration tests |
 | `agents-cli eval dataset synthesize` | Synthesize multi-turn eval scenarios for your agent |
 | `make eval` | Corpus preflight, then generate and grade the eval dataset |

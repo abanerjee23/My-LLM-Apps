@@ -111,4 +111,4 @@ on an average score. The current two-case baseline cannot settle a model choice.
 Google Cloud budget alerts, model-call budgets, Arize alerts and routine billing
 review are proposed operational controls; they are **not configured by the
 tracing migration**. Assign owners and thresholds before a customer launch.
-See [the build plan](../BUILD_PLAN.md) and [observability](observability.md).
+See [the build plan](build-plan.md) and [observability](observability.md).

@@ -30,7 +30,6 @@ locals {
     "vectorsearch.googleapis.com",
 
     # Durable agent-created requests and the human-review operations queue.
-    "firestore.googleapis.com",
     "artifactregistry.googleapis.com",
   ]
 }

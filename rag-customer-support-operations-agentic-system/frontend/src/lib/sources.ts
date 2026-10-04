@@ -2,20 +2,19 @@ export type Source = {
   title: string;
   document: string;
   excerpt?: string;
+  passageId?: string;
   kind?: "referenced";
 };
 
 export const policyDocuments = [
   { title: "Returns & exchanges", document: "tarnfield_returns_policy.pdf" },
   { title: "Product catalogue", document: "tarnfield_product_catalogue.pdf" },
-  { title: "Billing policy", document: "tarnfield_billing_policy.pdf" },
 ] as const;
 
 const knownDocuments = new Set<string>(policyDocuments.map((policy) => policy.document));
 const aliases: Record<string, RegExp> = {
   "tarnfield_returns_policy.pdf": /\breturns(?:\s*(?:&|and)\s*exchanges)?\s+policy\b/i,
   "tarnfield_product_catalogue.pdf": /\bproduct\s+catalog(?:ue)?\b/i,
-  "tarnfield_billing_policy.pdf": /\bbilling(?:\s*(?:&|and)\s*payments)?\s+policy\b/i,
 };
 
 function validatedSources(value: unknown): Source[] {
@@ -26,9 +25,11 @@ function validatedSources(value: unknown): Source[] {
     if (typeof item.document !== "string" || !knownDocuments.has(item.document)) continue;
     if (typeof item.title !== "string" || !item.title.trim()) continue;
     if (item.excerpt !== undefined && typeof item.excerpt !== "string") continue;
+    if (item.passageId !== undefined && typeof item.passageId !== "string") continue;
     if (item.kind !== undefined && item.kind !== "referenced") continue;
     const source: Source = { title: item.title, document: item.document };
     if (item.excerpt !== undefined) source.excerpt = item.excerpt;
+    if (item.passageId !== undefined) source.passageId = item.passageId;
     if (item.kind === "referenced") source.kind = item.kind;
     if (!accepted.has(source.document)) accepted.set(source.document, source);
   }

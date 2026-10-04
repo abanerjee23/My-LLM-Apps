@@ -41,8 +41,8 @@ def evaluate(instance):
         "Grade this Tarnfield customer-support response on a 1-5 scale. A 5 must "
         "apply the retrieved policy correctly, preserve a real source citation, "
         "be clear and empathetic, never claim a requested action is completed, "
-        "and—when the user explicitly asks to file an eligible request—give a "
-        "REQ reference and say it awaits human review. Penalize any policy answer "
+        "and explain that the assistant cannot file requests or execute refunds "
+        "or exchanges. Penalize any policy answer "
         "that relies on memory or general knowledge instead of retrieved evidence."
     )
     if reference:

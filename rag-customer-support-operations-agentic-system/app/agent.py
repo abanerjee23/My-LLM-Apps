@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Entry point. The architecture lives in app/agents.py; see BUILD_PLAN.md 3."""
+"""Entry point. One policy agent; see docs/build-plan.md."""
 
 from google.adk.apps import App
 

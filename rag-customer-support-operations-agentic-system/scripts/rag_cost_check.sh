@@ -9,7 +9,7 @@
 #
 # Why this exists: the RAG Engine billing tier is a project+location singleton,
 # not a property of the corpus. `make rag-down` deletes the corpus and leaves
-# the meter running. See BUILD_PLAN.md 2.5.
+# the meter running. See docs/build-plan.md 2.5.
 #
 # Run directly with --force to check now, ignoring the throttle.
 

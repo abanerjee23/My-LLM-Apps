@@ -40,9 +40,8 @@ __all__ = ["app"]
 def __getattr__(name: str):
     """Load the expensive agent graph only when the ADK entry point asks for it.
 
-    The reviewer dashboard imports ``app.support_actions`` but does not need ADK,
-    Gemini clients, RAG or the agent graph. Eagerly importing all of that added a
-    material Cloud Run cold start to a deterministic Firestore API.
+    Gateway and utility imports need not instantiate the Gemini client or RAG
+    dependencies until an agent-serving entry point actually needs them.
     """
     if name == "app":
         from .agent import app as agent_app

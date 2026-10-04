@@ -1,5 +1,11 @@
 # Evaluation workflow and evidence
 
+> Build update — 4 October 2026: the results below are historical; the two seed
+> cases now reflect policy-only guidance, but have not been rerun or calibrated.
+> They do not validate the new single-agent scope. Firestore/action capabilities
+> have been removed from source. Expand the seed coverage and calibrate
+> the judge before using these results as acceptance evidence.
+
 Reviewed on 1 October 2026. The formal evaluation engine is **`agents-cli` with
 a local custom Gemini judge**. The Galileo → Arize AI migration changes the
 observability destination to Arize AX; it does not replace the grading engine.
@@ -10,17 +16,17 @@ See the [main README](../README.md) for setup and the
 
 | Layer | Current implementation | Evidence and limits |
 |---|---|---|
-| Dataset | Two synthetic single-turn cases in [`basic-dataset.json`](../tests/eval/datasets/basic-dataset.json) | Final-sale refusal and faulty-item exchange handoff; no holdout split. |
-| Agent execution | `agents-cli eval generate`, using the project's ADK HTTP server | Runs the existing root and specialists, records events and final responses. |
+| Dataset | Two synthetic single-turn seed cases in [`basic-dataset.json`](../tests/eval/datasets/basic-dataset.json) | Final-sale exception and faulty-item policy guidance; no holdout split or new-design results. |
+| Agent execution | `agents-cli eval generate`, using the project's ADK HTTP server | Current source is a single policy agent; historical results used root/specialists. |
 | Scoring | `custom_response_quality` in [`eval_config.yaml`](../tests/eval/eval_config.yaml), implemented in [`response_quality.py`](../tests/eval/response_quality.py) | Local Python function calls Gemini `gemini-3.7-flash`; grading is billed. |
 | AI observability | Automatic OpenInference ADK spans exported to Arize AX | Agent inference can be traced; content is redacted by default. |
 | Hosted Arize evaluations | No evaluator, experiment, score-upload or online-evaluation configuration in this repository | Trace delivery is verified separately; hosted evaluation setup has not been verified or implemented here. |
 
 The judge receives the user prompt, final response, optional reference and full
 `agent_data` trace. Its rubric checks policy correctness, source citations,
-clarity, empathy and the boundary between a pending request and a completed
-action. It penalizes policy decisions based on memory/general knowledge and
-missing references when an eligible, explicitly authorized request is filed.
+clarity, empathy and refusal to claim actions were executed. It penalizes policy
+decisions based on memory/general knowledge rather than retrieved evidence.
+The revised rubric is an uncalibrated seed, not an acceptance evaluator.
 
 The judge uses temperature 0 and a structured score/explanation schema. These
 reduce variation and parsing failures; they do not guarantee deterministic
@@ -164,7 +170,7 @@ judge uses environment/ADC/API-key configuration instead.
 
 ## Dataset and scoring discipline
 
-The [dataset README](../tests/eval/datasets/README.md) documents the actual input
+The [dataset README](eval-datasets.md) documents the actual input
 shape. Give cases stable IDs, synthetic inputs and outcome-based references.
 Keep policy correctness, action authorization and customer wording explicit.
 Do not fit references to an incorrect generated answer to make a score improve.
@@ -181,7 +187,7 @@ measured.
 
 ## Coverage and release gaps
 
-The broader [product success metrics](../BUILD_PLAN.md#9-success-criteria-targets-versus-evidence) are
+The broader [product success metrics](build-plan.md#7-evaluation-plan) are
 proposed gates, not measured results of the two-case suite. The coverage plan is:
 
 | Area | Remaining cases or measurements |

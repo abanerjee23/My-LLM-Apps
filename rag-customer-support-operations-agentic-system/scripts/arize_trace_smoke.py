@@ -43,7 +43,7 @@ from openinference.instrumentation import REDACTED_VALUE
 from opentelemetry.sdk.trace import ReadableSpan
 from opentelemetry.sdk.trace.export import SpanExportResult
 
-from app import fixtures, support_actions
+from app import fixtures
 
 FINAL_SALE_QUESTION = (
     "Hi, I'd like to return the Solstice Edition trainers from order TF-88213 "
@@ -51,40 +51,80 @@ FINAL_SALE_QUESTION = (
 )
 REQUIRED_SPAN_KINDS = frozenset({"CHAIN", "AGENT", "LLM", "TOOL"})
 ADK_SCOPE = "openinference.instrumentation.google_adk"
-CONTENT_KEYS = frozenset({
-    "input.value", "output.value", "tool.parameters", "llm.invocation_parameters",
-    "gen_ai.tool.call.arguments", "gen_ai.tool.call.result",
-    "gen_ai.input.messages", "gen_ai.output.messages",
-    "gcp.vertex.agent.llm_request", "gcp.vertex.agent.llm_response",
-    "gcp.vertex.agent.tool_call_args", "gcp.vertex.agent.tool_response",
-    "gcp.vertex.agent.data",
-    "gen_ai.prompt", "gen_ai.completion", "gen_ai.system_instructions",
-    "tool.arguments", "tool.result", "tool.input", "tool.output",
-})
-CONTENT_PREFIXES = (
-    "input.value.", "output.value.", "llm.invocation_parameters.",
-    "llm.input_messages", "llm.output_messages", "gen_ai.input.messages",
-    "gen_ai.output.messages", "gen_ai.prompt.", "gen_ai.completion.",
-    "gcp.vertex.agent.llm_request.", "gcp.vertex.agent.llm_response.",
-    "gcp.vertex.agent.tool_call_args.", "gcp.vertex.agent.tool_response.",
+CONTENT_KEYS = frozenset(
+    {
+        "input.value",
+        "output.value",
+        "tool.parameters",
+        "llm.invocation_parameters",
+        "gen_ai.tool.call.arguments",
+        "gen_ai.tool.call.result",
+        "gen_ai.input.messages",
+        "gen_ai.output.messages",
+        "gcp.vertex.agent.llm_request",
+        "gcp.vertex.agent.llm_response",
+        "gcp.vertex.agent.tool_call_args",
+        "gcp.vertex.agent.tool_response",
+        "gcp.vertex.agent.data",
+        "gen_ai.prompt",
+        "gen_ai.completion",
+        "gen_ai.system_instructions",
+        "tool.arguments",
+        "tool.result",
+        "tool.input",
+        "tool.output",
+    }
 )
-OPERATIONAL_KEYS = frozenset({
-    "openinference.span.kind", "agent.name", "session.id", "user.id",
-    "tool.name", "tool.id", "llm.model_name", "llm.provider", "llm.system",
-    "gen_ai.operation.name", "gen_ai.agent.name", "gen_ai.tool.name",
-    "gen_ai.tool.type", "gen_ai.tool.call.id", "gen_ai.system",
-    "gen_ai.provider.name", "gen_ai.request.model", "gen_ai.response.model",
-    "gen_ai.response.finish_reasons", "gen_ai.conversation.id",
-    "gcp.vertex.agent.invocation_id", "gcp.vertex.agent.session_id",
-    "gcp.vertex.agent.event_id", "error.type", "exception.type",
-})
+CONTENT_PREFIXES = (
+    "input.value.",
+    "output.value.",
+    "llm.invocation_parameters.",
+    "llm.input_messages",
+    "llm.output_messages",
+    "gen_ai.input.messages",
+    "gen_ai.output.messages",
+    "gen_ai.prompt.",
+    "gen_ai.completion.",
+    "gcp.vertex.agent.llm_request.",
+    "gcp.vertex.agent.llm_response.",
+    "gcp.vertex.agent.tool_call_args.",
+    "gcp.vertex.agent.tool_response.",
+)
+OPERATIONAL_KEYS = frozenset(
+    {
+        "openinference.span.kind",
+        "agent.name",
+        "session.id",
+        "user.id",
+        "tool.name",
+        "tool.id",
+        "llm.model_name",
+        "llm.provider",
+        "llm.system",
+        "gen_ai.operation.name",
+        "gen_ai.agent.name",
+        "gen_ai.tool.name",
+        "gen_ai.tool.type",
+        "gen_ai.tool.call.id",
+        "gen_ai.system",
+        "gen_ai.provider.name",
+        "gen_ai.request.model",
+        "gen_ai.response.model",
+        "gen_ai.response.finish_reasons",
+        "gen_ai.conversation.id",
+        "gcp.vertex.agent.invocation_id",
+        "gcp.vertex.agent.session_id",
+        "gcp.vertex.agent.event_id",
+        "error.type",
+        "exception.type",
+    }
+)
 
 
 def _eligible_adk_span(span: ReadableSpan) -> bool:
-    return (
-        getattr(getattr(span, "instrumentation_scope", None), "name", None) == ADK_SCOPE
-        and bool((span.attributes or {}).get("openinference.span.kind"))
-    )
+    return getattr(
+        getattr(span, "instrumentation_scope", None), "name", None
+    ) == ADK_SCOPE and bool((span.attributes or {}).get("openinference.span.kind"))
 
 
 def privacy_report(
@@ -98,15 +138,22 @@ def privacy_report(
     """
     unexpected_scope = sum(not _eligible_adk_span(span) for span in spans)
     unredacted = sum(
-        1 for span in spans for key, value in (span.attributes or {}).items()
+        1
+        for span in spans
+        for key, value in (span.attributes or {}).items()
         if (key in CONTENT_KEYS or key.startswith(CONTENT_PREFIXES))
         and value != REDACTED_VALUE
     )
     unknown_fields = sum(
-        1 for span in spans for key, value in (span.attributes or {}).items()
+        1
+        for span in spans
+        for key, value in (span.attributes or {}).items()
         if key not in OPERATIONAL_KEYS
         and not (key in {"input.value", "output.value"} and value == REDACTED_VALUE)
-        and not (key.startswith(("llm.token_count.", "gen_ai.usage.")) and isinstance(value, (int, float)))
+        and not (
+            key.startswith(("llm.token_count.", "gen_ai.usage."))
+            and isinstance(value, (int, float))
+        )
     )
     unsafe_events = 0
     for span in spans:
@@ -124,7 +171,14 @@ def privacy_report(
     unsafe_links = sum(
         bool(link.attributes) for span in spans for link in span.links or []
     )
-    content_safe = unredacted == unknown_fields == unsafe_events == unsafe_status == unsafe_links == 0
+    content_safe = (
+        unredacted
+        == unknown_fields
+        == unsafe_events
+        == unsafe_status
+        == unsafe_links
+        == 0
+    )
     return {
         "capture_content": capture_content,
         "inspected_outbound_spans": len(spans),
@@ -148,7 +202,9 @@ class _OutboundCapture:
 
     def export(self, sdk_export, exporter, spans) -> SpanExportResult:
         self.spans.extend(spans)
-        if not privacy_report(spans, capture_content=self.capture_content)["privacy_passed"]:
+        if not privacy_report(spans, capture_content=self.capture_content)[
+            "privacy_passed"
+        ]:
             # Reject before transport. Keep only safe aggregate failure counts
             # in the printed report; do not log offending values or exceptions.
             return SpanExportResult.FAILURE
@@ -174,8 +230,7 @@ class _TransportLlm(BaseLlm):
         self, llm_request: LlmRequest, stream: bool = False
     ) -> AsyncGenerator[LlmResponse, None]:
         has_tool_response = any(
-            part.function_response
-            and part.function_response.name == "read_smoke_order"
+            part.function_response and part.function_response.name == "read_smoke_order"
             for content in llm_request.contents
             for part in content.parts or []
         )
@@ -229,9 +284,7 @@ async def run_workflow(*, real: bool, timeout_seconds: float = 120) -> dict[str,
     reply: list[str] = []
     tool_calls: list[str] = []
     started = time.monotonic()
-    # A smoke run must never write to the production support-request store,
-    # including when an unexpected model choice attempts escalation.
-    support_actions.set_store(support_actions.InMemorySupportActionStore())
+    # Isolated synthetic session and memory scope; no action tools exist.
     try:
         async with asyncio.timeout(timeout_seconds):
             async for event in runner.run_async(
@@ -241,7 +294,7 @@ async def run_workflow(*, real: bool, timeout_seconds: float = 120) -> dict[str,
                     role="user", parts=[types.Part(text=FINAL_SALE_QUESTION)]
                 ),
                 run_config=RunConfig(
-                    streaming_mode=StreamingMode.SSE,
+                    streaming_mode=StreamingMode.NONE,
                     max_llm_calls=6,
                 ),
             ):
@@ -251,7 +304,9 @@ async def run_workflow(*, real: bool, timeout_seconds: float = 120) -> dict[str,
                 if event.author == agent.name and event.is_final_response():
                     text_parts = [
                         part.text
-                        for part in ((event.content.parts or []) if event.content else [])
+                        for part in (
+                            (event.content.parts or []) if event.content else []
+                        )
                         if part.text and not part.thought
                     ]
                     # Final content replaces any partial tokens; do not duplicate
@@ -266,39 +321,48 @@ async def run_workflow(*, real: bool, timeout_seconds: float = 120) -> dict[str,
             "reply": "".join(reply).strip(),
             "elapsed_seconds": round(time.monotonic() - started, 3),
             "root_tool_calls": tool_calls,
-            "isolated_support_requests": len(support_actions.get_store().list()),
         }
     finally:
-        try:
-            await runner.close()
-        finally:
-            support_actions.reset_store()
+        await runner.close()
 
 
 def span_report(
-    spans: Sequence[ReadableSpan], *, capture_content: bool = False
+    spans: Sequence[ReadableSpan],
+    *,
+    capture_content: bool = False,
+    require_tools: bool = True,
 ) -> dict[str, Any]:
     """Summarize real framework spans, without prompts, raw tools, or secrets."""
-    ai_spans = [
-        span for span in spans
-        if _eligible_adk_span(span)
-    ]
+    ai_spans = [span for span in spans if _eligible_adk_span(span)]
     kinds = Counter(
         str(span.attributes["openinference.span.kind"]) for span in ai_spans
     )
-    llm_spans = [span for span in ai_spans if span.attributes["openinference.span.kind"] == "LLM"]
+    llm_spans = [
+        span for span in ai_spans if span.attributes["openinference.span.kind"] == "LLM"
+    ]
     return {
         **privacy_report(spans, capture_content=capture_content),
         "span_count": len(ai_spans),
         "span_kinds": dict(sorted(kinds.items())),
-        "required_span_kinds_present": REQUIRED_SPAN_KINDS <= kinds.keys(),
+        "required_span_kinds_present": (
+            REQUIRED_SPAN_KINDS if require_tools else REQUIRED_SPAN_KINDS - {"TOOL"}
+        )
+        <= kinds.keys(),
         "model_calls": len(llm_spans),
-        "models": sorted({
-            str(span.attributes["llm.model_name"])
-            for span in llm_spans if "llm.model_name" in span.attributes
-        }),
-        "prompt_tokens": sum(int(span.attributes.get("llm.token_count.prompt", 0)) for span in llm_spans),
-        "output_tokens": sum(int(span.attributes.get("llm.token_count.completion", 0)) for span in llm_spans),
+        "models": sorted(
+            {
+                str(span.attributes["llm.model_name"])
+                for span in llm_spans
+                if "llm.model_name" in span.attributes
+            }
+        ),
+        "prompt_tokens": sum(
+            int(span.attributes.get("llm.token_count.prompt", 0)) for span in llm_spans
+        ),
+        "output_tokens": sum(
+            int(span.attributes.get("llm.token_count.completion", 0))
+            for span in llm_spans
+        ),
         "trace_ids": sorted({f"{span.context.trace_id:032x}" for span in ai_spans}),
         "spans": [
             {
@@ -319,8 +383,11 @@ def export_report(
     counters = {
         key: int(after.get(key, 0)) - int(before.get(key, 0))
         for key in (
-            "attempted_batches", "successful_batches", "failed_batches",
-            "attempted_spans", "successful_spans",
+            "attempted_batches",
+            "successful_batches",
+            "failed_batches",
+            "attempted_spans",
+            "successful_spans",
         )
     }
     accepted = (
@@ -352,7 +419,9 @@ async def main(*, real: bool, timeout_seconds: float = 120) -> int:
     # The production helper sanitizes exported copies. Inspect those copies,
     # rather than the original Cloud spans seen by a provider-level processor.
     with patch.object(HTTPSpanExporter, "export", checked_export):
-        return await _run_smoke(real=real, timeout_seconds=timeout_seconds, capture=capture)
+        return await _run_smoke(
+            real=real, timeout_seconds=timeout_seconds, capture=capture
+        )
 
 
 async def _run_smoke(
@@ -367,7 +436,11 @@ async def _run_smoke(
 
     try:
         if not setup_arize_observability():
-            print(json.dumps({"error": "Enable ARIZE_ENABLED and configure Arize credentials."}))
+            print(
+                json.dumps(
+                    {"error": "Enable ARIZE_ENABLED and configure Arize credentials."}
+                )
+            )
             return 1
         before = get_arize_export_diagnostics()
         try:
@@ -384,20 +457,30 @@ async def _run_smoke(
         exported = export_report(
             before, get_arize_export_diagnostics(), flush_completed=flushed
         )
-        generated = span_report(capture.spans, capture_content=capture.capture_content)
+        generated = span_report(
+            capture.spans,
+            capture_content=capture.capture_content,
+            require_tools=not real,
+        )
         print(json.dumps({**workflow, **generated, "export": exported}, indent=2))
-        return int(not (
-            workflow["reply"]
-            and generated["required_span_kinds_present"]
-            and generated["privacy_passed"]
-            and exported["collector_accepted"]
-        ))
+        return int(
+            not (
+                workflow["reply"]
+                and generated["required_span_kinds_present"]
+                and generated["privacy_passed"]
+                and exported["collector_accepted"]
+            )
+        )
     except Exception as exc:
         # Client/transport exceptions can include headers; report the class only.
-        print(json.dumps({
-            "error": "Arize smoke setup or verification failed.",
-            "error_type": type(exc).__name__,
-        }))
+        print(
+            json.dumps(
+                {
+                    "error": "Arize smoke setup or verification failed.",
+                    "error_type": type(exc).__name__,
+                }
+            )
+        )
         return 1
     finally:
         await asyncio.to_thread(shutdown_arize_observability)
@@ -405,7 +488,9 @@ async def _run_smoke(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--real", action="store_true", help="Spend credits on one real root-agent turn.")
+    parser.add_argument(
+        "--real", action="store_true", help="Spend credits on one real root-agent turn."
+    )
     parser.add_argument("--timeout-seconds", type=float, default=120)
     args = parser.parse_args()
     sys.exit(asyncio.run(main(real=args.real, timeout_seconds=args.timeout_seconds)))

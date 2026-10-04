@@ -1,10 +1,10 @@
 {
   "eval_cases": [
     {
-      "eval_case_id": "final_sale_is_refused_not_filed",
+      "eval_case_id": "final_sale_policy_exception",
       "prompt": {
         "role": "user",
-        "parts": [{"text": "I want to return the Solstice Edition trainers from order TF-88213. They arrived last week, so please arrange the return."}]
+        "parts": [{"text": "Can I return the Solstice Edition trainers from order TF-88213? They arrived last week and are not faulty."}]
       },
       "reference": {
         "response": {
@@ -14,15 +14,15 @@
       }
     },
     {
-      "eval_case_id": "faulty_exchange_creates_pending_handoff",
+      "eval_case_id": "faulty_exchange_policy_guidance",
       "prompt": {
         "role": "user",
-        "parts": [{"text": "The sole is separating on the trainers from order TF-88455. I want a replacement in the same model and size, and I confirm you should file the request for human review now."}]
+        "parts": [{"text": "The sole is separating on the trainers from order TF-88455. What does the exchange policy say I should do?"}]
       },
       "reference": {
         "response": {
           "role": "model",
-          "parts": [{"text": "Check the faulty-goods policy, file a durable exchange request, provide its REQ reference, cite the policy source, and state clearly that a human must approve it before anything happens."}]
+          "parts": [{"text": "Explain the faulty-item replacement/refund policy and its customer next step, with a retrieved policy citation. Do not file a request, invent a REQ reference or claim an exchange is arranged."}]
         }
       }
     }

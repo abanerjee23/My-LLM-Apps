@@ -1,19 +1,25 @@
 # Tarnfield evaluation datasets
 
+> Build update — 4 October 2026: the results below are historical; the two seed
+> cases now reflect policy-only guidance, but have not been rerun or calibrated.
+> They do not validate the new single-agent scope. Firestore/action capabilities
+> have been removed from source. Expand the seed coverage and calibrate
+> the judge before using these results as acceptance evidence.
+
 This directory contains synthetic behavioural cases for the existing ADK agent.
 The current runner is `agents-cli`; scoring uses the local Gemini judge in
-[`response_quality.py`](../response_quality.py), selected by
-[`eval_config.yaml`](../eval_config.yaml). Arize AX observes automatic ADK
+[`response_quality.py`](../tests/eval/response_quality.py), selected by
+[`eval_config.yaml`](../tests/eval/eval_config.yaml). Arize AX observes automatic ADK
 execution when enabled. Hosted Arize evaluators are not configured by this repository.
 
-See the [evaluation guide](../../../docs/evaluation.md) for commands, dated
+See the [evaluation guide](evaluation.md) for commands, dated
 evidence, coverage gaps and grading limitations. The
-[observability guide](../../../docs/observability.md) explains the Galileo →
-Arize AI migration; the [main README](../../../README.md) covers setup.
+[observability guide](observability.md) explains the Galileo →
+Arize AI migration; the [main README](../README.md) covers setup.
 
 ## Current cases
 
-[`basic-dataset.json`](basic-dataset.json) contains two single-turn cases:
+[`basic-dataset.json`](../tests/eval/datasets/basic-dataset.json) contains two single-turn cases:
 
 | Case ID | User journey | Expected behaviour |
 |---|---|---|
@@ -47,7 +53,7 @@ The overrides apply to a newly started CLI server, not a reused server or
 The CLI creates fresh sessions but uses one `eval-cli-user` identity, so memory
 can carry between cases within a run. Keep `.env.local` limited to local secrets
 rather than overrides of these isolation settings. See
-[run a local baseline](../../../docs/evaluation.md#run-a-local-baseline) for prerequisites.
+[run a local baseline](evaluation.md#run-a-local-baseline) for prerequisites.
 
 Use the guide's two-step commands to preserve an explicit trace file. A bare
 `eval grade` reads every JSON file in the default trace directory, including
@@ -92,7 +98,7 @@ for the complete schema and check installed `agents-cli eval generate --help`.
 Add billing, standard returns, policy gaps, unavailable retrieval, injection,
 memory conflicts and action failures before claiming release coverage. Reserve
 holdouts and repeat runs; see the
-[coverage plan](../../../docs/evaluation.md#coverage-and-release-gaps).
+[coverage plan](evaluation.md#coverage-and-release-gaps).
 
 Use synthetic identities and contact details. Local JSON/HTML reports contain
 full prompts, replies, tool payloads and agent instructions. Arize's default

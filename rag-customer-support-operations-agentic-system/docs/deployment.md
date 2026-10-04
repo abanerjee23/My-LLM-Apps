@@ -1,11 +1,17 @@
 # Deployment and operations
 
+> Build update — 4 October 2026: source now contains only the single policy agent.
+> This inventory describes the older live deployment and remains for recovery.
+> The local customer gateway executes current source with managed state; it does
+> not invoke the old deployed model workflow. No cloud resources were removed.
+> Legacy action smoke scripts have been deleted; do not follow their commands.
+
 Status checked **1 October 2026**. This runbook describes the existing portfolio
 deployment and its boundaries. Documentation edits do not require redeployment.
 
 The product entry point is **[Tarnfield Care customer chat](http://127.0.0.1:3010)**,
 currently hosted locally on this computer and connected to the deployed agent.
-Follow [the frontend setup guide](../frontend/README.md) to start it. The private
+Follow [the frontend setup guide](frontend.md) to start it. The private
 reviewer service below supports internal operations; public customer hosting is
 not deployed yet.
 
@@ -63,7 +69,7 @@ Google also documents [authenticated browser access through the local proxy](htt
 
 ## Run the customer frontend against the current agent
 
-Follow [the frontend setup guide](../frontend/README.md). Model calls use the
+Follow [the frontend setup guide](frontend.md). Model calls use the
 Gemini Developer API; cloud retrieval and managed services use Google Application
 Default Credentials (ADC). CLI login and ADC login are separate credential
 paths.
@@ -167,5 +173,5 @@ measured latency, policy freshness ownership, retention/consent, alerts,
 CI/CD and a rehearsed rollback remain open. Readiness of the two deployed
 services does not resolve these product requirements.
 
-See [the build plan](../BUILD_PLAN.md), [cost guide](costs.md) and
-[engineering notes](../ENGINEERING_NOTES.md) for evidence and tradeoffs.
+See [the build plan](build-plan.md), [cost guide](costs.md) and
+[engineering notes](engineering-notes.md) for evidence and tradeoffs.

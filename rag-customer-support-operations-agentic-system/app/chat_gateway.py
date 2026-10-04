@@ -43,7 +43,6 @@ COOKIE_NAME = "tarnfield_visitor"
 COOKIE_TTL_SECONDS = 365 * 24 * 60 * 60
 SESSION_ID = re.compile(r"^[A-Za-z0-9_-]{1,128}$")
 VISITOR_ID = re.compile(r"^[a-f0-9]{32}$")
-REQUEST_REFERENCE = re.compile(r"^REQ-[A-F0-9]{10}$")
 # A 6,000-character message may use six JSON bytes per escaped character.
 # Leave room for the conversation ID and object envelope as well.
 MAX_BODY_BYTES = 40_000
@@ -54,25 +53,8 @@ TITLE_INITIALIZED_KEY = "ui:conversation_title_initialized"
 DOCUMENT_TITLES = {
     "tarnfield_returns_policy.pdf": "Returns & exchanges policy",
     "tarnfield_product_catalogue.pdf": "Product catalogue",
-    "tarnfield_billing_policy.pdf": "Billing & payments policy",
 }
-TOOL_LABELS = {
-    "returns_exchanges": "Checking returns and exchanges",
-    "billing": "Checking billing and payments",
-    "get_returns_context": "Checking your order and the returns policy",
-    "get_billing_context": "Checking your order and the billing policy",
-    "search_returns_policy": "Checking the returns policy",
-    "search_billing_policy": "Checking the billing policy",
-    "lookup_order": "Checking your order",
-    "lookup_invoice": "Checking your invoice",
-    "check_charges": "Checking your charges",
-    "get_support_action_status": "Checking your support request",
-    "remember_contact_details": "Saving your contact preference",
-    "request_return": "Sending your return request for human review",
-    "request_exchange": "Sending your exchange request for human review",
-    "request_billing_adjustment": "Sending your billing request for human review",
-    "escalate_to_human": "Sending your question to the support team",
-}
+TOOL_LABELS = {"preload_memory": "Recalling useful details"}
 
 
 def _development_secret() -> str:
@@ -109,9 +91,7 @@ class GatewaySettings:
             )
         allowed = frozenset(
             value.strip().rstrip("/")
-            for value in (
-                origins or "http://127.0.0.1:3010"
-            ).split(",")
+            for value in (origins or "http://127.0.0.1:3010").split(",")
             if value.strip()
         )
         for origin in allowed:
@@ -126,7 +106,9 @@ class GatewaySettings:
                 or parsed.password
                 or (production and parsed.scheme != "https")
             ):
-                raise RuntimeError("GATEWAY_ALLOWED_ORIGINS must contain exact origins.")
+                raise RuntimeError(
+                    "GATEWAY_ALLOWED_ORIGINS must contain exact origins."
+                )
         return cls(
             cookie_secret=secret or _development_secret(),
             allowed_origins=allowed,
@@ -183,14 +165,12 @@ class AgentBackend(Protocol):
     ) -> AsyncIterator[dict[str, Any]]: ...
 
 
-class DeployedAgentBackend:
+class ManagedSessionBackend:
     """Use inspected Agent Platform and ADK managed-session APIs."""
 
     def __init__(self) -> None:
         self._session_service: Any = None
-        self._agent: Any = None
         self._runtime_name = ""
-        self._init_lock = asyncio.Lock()
 
     def _sessions(self) -> Any:
         if self._session_service is None:
@@ -213,23 +193,6 @@ class DeployedAgentBackend:
                 project=project, location=location, agent_engine_id=runtime_id
             )
         return self._session_service
-
-    async def _runtime(self) -> Any:
-        if self._agent is None:
-            async with self._init_lock:
-                if self._agent is None:
-                    import agentplatform
-
-                    self._sessions()
-                    parts = self._runtime_name.split("/")
-
-                    def connect() -> Any:
-                        client = agentplatform.Client(project=parts[1], location=parts[3])
-                        return client.agent_engines.get(name=self._runtime_name)
-
-                    # SDK get() is synchronous. Keep it off the ASGI event loop.
-                    self._agent = await asyncio.to_thread(connect)
-        return self._agent
 
     async def create_session(
         self, user_id: str, title: str, *, title_initialized: bool = True
@@ -266,17 +229,21 @@ class DeployedAgentBackend:
             metadata = Event(
                 author="chat_gateway",
                 invocation_id=f"gateway-title-{secrets.token_hex(8)}",
-                actions=EventActions(state_delta={
-                    TITLE_KEY: title,
-                    TITLE_INITIALIZED_KEY: True,
-                }),
+                actions=EventActions(
+                    state_delta={
+                        TITLE_KEY: title,
+                        TITLE_INITIALIZED_KEY: True,
+                    }
+                ),
             )
             await service.append_event(session=session, event=metadata)
         return session.model_dump(mode="json")
 
     async def list_sessions(self, user_id: str) -> list[dict[str, Any]]:
         service = self._sessions()
-        result = await service.list_sessions(app_name=self._runtime_name, user_id=user_id)
+        result = await service.list_sessions(
+            app_name=self._runtime_name, user_id=user_id
+        )
         # Recheck ownership rather than relying solely on a remote filter.
         return [
             session.model_dump(mode="json")
@@ -295,7 +262,9 @@ class DeployedAgentBackend:
                 app_name=self._runtime_name,
                 user_id=user_id,
                 session_id=session_id,
-                config=None if include_events else GetSessionConfig(num_recent_events=0),
+                config=None
+                if include_events
+                else GetSessionConfig(num_recent_events=0),
             )
         except ValueError:
             # The managed API raises ValueError for another user's session.
@@ -303,19 +272,6 @@ class DeployedAgentBackend:
         if session is None or session.user_id != user_id:
             return None
         return session.model_dump(mode="json")
-
-    async def stream_query(
-        self, user_id: str, session_id: str, message: str
-    ) -> AsyncIterator[dict[str, Any]]:
-        agent = await self._runtime()
-        async for event in agent.async_stream_query(
-            user_id=user_id,
-            session_id=session_id,
-            message=message,
-            run_config={"streaming_mode": "sse"},
-            http_options={"timeout": 120_000},
-        ):
-            yield event
 
 
 def _signed_visitor(settings: GatewaySettings, visitor: str, issued: int) -> str:
@@ -382,10 +338,75 @@ async def _read_json(request: Request) -> dict[str, Any]:
     try:
         body = json.loads(raw)
     except (ValueError, UnicodeDecodeError, RecursionError) as error:
-        raise GatewayError(400, "We couldn't read that message. Please try again.") from error
+        raise GatewayError(
+            400, "We couldn't read that message. Please try again."
+        ) from error
     if not isinstance(body, dict):
         raise GatewayError(400, "We couldn't read that message. Please try again.")
     return body
+
+
+class LocalPolicyBackend(ManagedSessionBackend):
+    """Run current source against managed sessions + Memory Bank, not old cloud code.
+
+    CHAT_STATE_BACKEND=local provides SQLite sessions and in-memory recall for
+    isolated development. Default managed mode reuses the configured runtime's
+    state services, but never invokes its legacy deployed agent.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._runner = None
+
+    async def close(self) -> None:
+        if self._runner is not None:
+            await self._runner.close()
+
+    def _sessions(self) -> Any:
+        if os.getenv("CHAT_STATE_BACKEND", "managed") == "local":
+            if self._session_service is None:
+                from app.app_utils.services import get_session_service
+
+                self._session_service = get_session_service()
+                self._runtime_name = "app"
+            return self._session_service
+        return super()._sessions()
+
+    async def stream_query(self, user_id: str, session_id: str, message: str):
+        from google.adk.agents.run_config import RunConfig, StreamingMode
+        from google.adk.runners import Runner
+        from google.genai import types
+
+        if self._runner is None:
+            from app.agent import app as policy_app
+
+            sessions = self._sessions()
+            if os.getenv("CHAT_STATE_BACKEND", "managed") == "local":
+                from app.app_utils.services import get_memory_service
+
+                memory = get_memory_service()
+            else:
+                from google.adk.memory.vertex_ai_memory_bank_service import (
+                    VertexAiMemoryBankService,
+                )
+
+                parts = self._runtime_name.split("/")
+                memory = VertexAiMemoryBankService(
+                    project=parts[1], location=parts[3], agent_engine_id=parts[5]
+                )
+            self._runner = Runner(
+                app=policy_app, session_service=sessions, memory_service=memory
+            )
+        async for event in self._runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=types.Content(
+                role="user", parts=[types.Part.from_text(text=message)]
+            ),
+            # Validate the full structured answer before exposing customer text.
+            run_config=RunConfig(streaming_mode=StreamingMode.NONE),
+        ):
+            yield event.model_dump(mode="json", exclude_none=True)
 
 
 def _parts(event: dict[str, Any]) -> list[dict[str, Any]]:
@@ -401,7 +422,9 @@ def _parts(event: dict[str, Any]) -> list[dict[str, Any]]:
 def _visible_text(event: dict[str, Any]) -> str:
     parts = _parts(event)
     # Text accompanying a tool call is internal work, not a completed reply.
-    if any(part.get("function_call") or part.get("function_response") for part in parts):
+    if any(
+        part.get("function_call") or part.get("function_response") for part in parts
+    ):
         return ""
     return "".join(
         part["text"]
@@ -411,43 +434,24 @@ def _visible_text(event: dict[str, Any]) -> str:
 
 
 def _sources(event: dict[str, Any]) -> list[dict[str, str]]:
-    """Expose retrieved evidence only when the runtime actually returns it.
-
-    Explicit AgentTool currently hides child events, and ADK trims temp state
-    before yielding managed events. Such turns legitimately have no rich source
-    metadata; the final answer's inline citations remain visible. Model-written
-    citation text alone never becomes a verified retrieval excerpt here.
-    """
-    evidence: list[str] = []
+    """Accept only citation metadata validated by the policy callback."""
     delta = (event.get("actions") or {}).get("state_delta") or {}
-    context = delta.get("temp:support_action_context")
-    if isinstance(context, dict) and isinstance(context.get("policy_evidence"), str):
-        evidence.append(context["policy_evidence"])
-    for part in _parts(event):
-        response = part.get("function_response") or {}
-        result = response.get("response")
-        if response.get("name") in ("get_returns_context", "get_billing_context"):
-            if isinstance(result, dict) and isinstance(result.get("policy_evidence"), str):
-                evidence.append(result["policy_evidence"])
-        elif response.get("name") in ("search_returns_policy", "search_billing_policy"):
-            if isinstance(result, dict) and isinstance(result.get("result"), str):
-                evidence.append(result["result"])
-    found: dict[str, dict[str, str]] = {}
-    # Only accept documents from this policy corpus. Never parse model prose as evidence.
-    names = "|".join(re.escape(name) for name in DOCUMENT_TITLES)
-    pattern = re.compile(rf"\[({names})\]\s*(.*?)(?=\n\n\[|\Z)", re.DOTALL)
-    for extract in evidence:
-        for match in pattern.finditer(extract):
-            document, excerpt = match.groups()
-            found.setdefault(
-                document,
-                {
-                    "title": DOCUMENT_TITLES[document],
-                    "document": document,
-                    "excerpt": excerpt.strip()[:800],
-                },
-            )
-    return list(found.values())
+    citations = delta.get("policy:citations") or []
+    found = []
+    for item in citations if isinstance(citations, list) else []:
+        if not isinstance(item, dict) or item.get("document") not in DOCUMENT_TITLES:
+            continue
+        if not isinstance(item.get("excerpt"), str) or not item.get("passage_id"):
+            continue
+        found.append(
+            {
+                "title": DOCUMENT_TITLES[item["document"]],
+                "document": item["document"],
+                "excerpt": item["excerpt"][:1600],
+                "passageId": str(item["passage_id"]),
+            }
+        )
+    return found
 
 
 def _history(session: dict[str, Any]) -> list[dict[str, Any]]:
@@ -474,40 +478,16 @@ def _history(session: dict[str, Any]) -> list[dict[str, Any]]:
     return messages
 
 
-def _support_requests(session: dict[str, Any]) -> list[dict[str, str]]:
-    """Recover recorded references even when the final reply did not finish.
-
-    These are references saved by the request tools, not current workflow status.
-    The user can ask the agent to check a reference's live status afterwards.
-    """
-    recorded = (session.get("state") or {}).get("user:open_request_refs") or []
-    found: dict[str, dict[str, str]] = {}
-    for item in recorded if isinstance(recorded, list) else []:
-        if not isinstance(item, dict):
-            continue
-        reference = item.get("reference")
-        kind = item.get("kind")
-        if (
-            not isinstance(reference, str)
-            or not REQUEST_REFERENCE.fullmatch(reference)
-            or kind not in {"return", "exchange", "billing_adjustment", "escalation"}
-        ):
-            continue
-        found[reference] = {
-            "reference": reference,
-            "kind": kind,
-            "orderId": str(item.get("order_id") or "")[:64],
-        }
-    return list(found.values())
-
-
 def _sse(kind: str, payload: dict[str, Any]) -> str:
     return f"event: {kind}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
 def _needs_title(state: dict[str, Any]) -> bool:
     return state.get(TITLE_INITIALIZED_KEY) is not True and state.get(TITLE_KEY) in (
-        None, "", "New conversation", "Conversation"
+        None,
+        "",
+        "New conversation",
+        "Conversation",
     )
 
 
@@ -523,7 +503,7 @@ def create_app(
     *, settings: GatewaySettings | None = None, backend: AgentBackend | None = None
 ) -> FastAPI:
     settings = settings or GatewaySettings.from_env()
-    backend = backend or DeployedAgentBackend()
+    backend = backend or LocalPolicyBackend()
     active_visitors: set[str] = set()
     active_conversations: dict[str, str] = {}
     tasks: set[asyncio.Task] = set()
@@ -535,6 +515,8 @@ def create_app(
         for task in pending:
             task.cancel()
         await asyncio.gather(*pending, return_exceptions=True)
+        if close := getattr(backend, "close", None):
+            await close()
 
     app = FastAPI(title="Tarnfield customer chat gateway", lifespan=lifespan)
     app.state.active_visitors = active_visitors
@@ -544,11 +526,13 @@ def create_app(
     @app.exception_handler(GatewayError)
     async def gateway_error(_: Request, error: GatewayError) -> JSONResponse:
         return JSONResponse(
-            {"error": {
-                "message": error.message,
-                "retryable": error.retryable,
-                **error.metadata,
-            }},
+            {
+                "error": {
+                    "message": error.message,
+                    "retryable": error.retryable,
+                    **error.metadata,
+                }
+            },
             status_code=error.status,
             headers={"Cache-Control": "no-store"},
         )
@@ -575,9 +559,7 @@ def create_app(
             raise
         except Exception as error:
             logger.warning("Managed session request failed (%s)", type(error).__name__)
-            raise GatewayError(
-                503, failure_message, True
-            ) from error
+            raise GatewayError(503, failure_message, True) from error
 
     async def created_session(
         user_id: str, title: str, *, initialized: bool = True
@@ -597,14 +579,20 @@ def create_app(
             raise GatewayError(503, message, True)
         return session
 
-    async def owned_session(user_id: str, conversation_id: str, *, events: bool) -> dict:
+    async def owned_session(
+        user_id: str, conversation_id: str, *, events: bool
+    ) -> dict:
         if not SESSION_ID.fullmatch(conversation_id):
-            raise GatewayError(404, "This conversation isn't available in this browser.")
+            raise GatewayError(
+                404, "This conversation isn't available in this browser."
+            )
         session = await cloud_call(
             backend.get_session(user_id, conversation_id, include_events=events)
         )
         if not session or session.get("user_id") != user_id:
-            raise GatewayError(404, "This conversation isn't available in this browser.")
+            raise GatewayError(
+                404, "This conversation isn't available in this browser."
+            )
         return session
 
     @app.get("/health", include_in_schema=False)
@@ -640,11 +628,17 @@ def create_app(
             }
             for session in sessions
         ]
-        return _set_cookie(JSONResponse({
-            "conversations": result,
-            "active": user_id in active_visitors,
-            "activeConversationId": active_conversations.get(user_id),
-        }), token, settings)
+        return _set_cookie(
+            JSONResponse(
+                {
+                    "conversations": result,
+                    "active": user_id in active_visitors,
+                    "activeConversationId": active_conversations.get(user_id),
+                }
+            ),
+            token,
+            settings,
+        )
 
     @app.get("/api/conversations/{conversation_id}")
     async def conversation(request: Request, conversation_id: str) -> JSONResponse:
@@ -652,14 +646,15 @@ def create_app(
         user_id, token = _visitor(request, settings)
         session = await owned_session(user_id, conversation_id, events=True)
         return _set_cookie(
-            JSONResponse({
-                "conversationId": conversation_id,
-                "title": _conversation_title(session),
-                "active": user_id in active_visitors,
-                "inFlight": active_conversations.get(user_id) == conversation_id,
-                "messages": _history(session),
-                "supportRequests": _support_requests(session),
-            }),
+            JSONResponse(
+                {
+                    "conversationId": conversation_id,
+                    "title": _conversation_title(session),
+                    "active": user_id in active_visitors,
+                    "inFlight": active_conversations.get(user_id) == conversation_id,
+                    "messages": _history(session),
+                }
+            ),
             token,
             settings,
         )
@@ -674,14 +669,19 @@ def create_app(
             raise busy(user_id)
         active_visitors.add(user_id)
         try:
-            session = await created_session(user_id, "New conversation", initialized=False)
+            session = await created_session(
+                user_id, "New conversation", initialized=False
+            )
         finally:
             active_visitors.discard(user_id)
         return _set_cookie(
-            JSONResponse({
-                "conversationId": session["id"],
-                "title": _conversation_title(session),
-            }, status_code=201),
+            JSONResponse(
+                {
+                    "conversationId": session["id"],
+                    "title": _conversation_title(session),
+                },
+                status_code=201,
+            ),
             token,
             settings,
         )
@@ -692,14 +692,18 @@ def create_app(
         try:
             body = ChatRequest.model_validate(await _read_json(request))
         except ValidationError as error:
-            raise GatewayError(400, "Enter a message of up to 6,000 characters.") from error
+            raise GatewayError(
+                400, "Enter a message of up to 6,000 characters."
+            ) from error
         user_id, token = _visitor(request, settings)
         if user_id in active_visitors:
             raise busy(user_id)
         active_visitors.add(user_id)
         try:
             if body.conversationId:
-                session = await owned_session(user_id, body.conversationId, events=False)
+                session = await owned_session(
+                    user_id, body.conversationId, events=False
+                )
                 if _needs_title(session.get("state") or {}):
                     session = await cloud_call(
                         backend.set_conversation_title(
@@ -708,7 +712,9 @@ def create_app(
                         failure_message="We couldn't save your conversation yet. Your message wasn't sent. Please try again.",
                     )
                     if not session or session.get("user_id") != user_id:
-                        raise GatewayError(404, "This conversation isn't available in this browser.")
+                        raise GatewayError(
+                            404, "This conversation isn't available in this browser."
+                        )
             else:
                 session = await created_session(user_id, _message_title(body.message))
             conversation_id = session["id"]
@@ -725,14 +731,23 @@ def create_app(
             sources: dict[str, dict[str, str]] = {}
             last_status = ""
             try:
-                queue.put_nowait(_sse("session", {
-                    "conversationId": conversation_id,
-                    "title": _conversation_title(session),
-                }))
+                queue.put_nowait(
+                    _sse(
+                        "session",
+                        {
+                            "conversationId": conversation_id,
+                            "title": _conversation_title(session),
+                        },
+                    )
+                )
                 async with asyncio.timeout(settings.turn_timeout):
-                    async for event in backend.stream_query(user_id, conversation_id, body.message):
+                    async for event in backend.stream_query(
+                        user_id, conversation_id, body.message
+                    ):
                         if event.get("error_code") or event.get("error_message"):
-                            raise RuntimeError("Agent Runtime reported an incomplete turn.")
+                            raise RuntimeError(
+                                "Agent Runtime reported an incomplete turn."
+                            )
                         for part in _parts(event):
                             tool = (part.get("function_call") or {}).get("name")
                             label = TOOL_LABELS.get(tool)
@@ -745,7 +760,9 @@ def create_app(
                                 sources[source["document"]] = source
                                 changed = True
                         if changed:
-                            queue.put_nowait(_sse("sources", {"sources": list(sources.values())}))
+                            queue.put_nowait(
+                                _sse("sources", {"sources": list(sources.values())})
+                            )
                         if event.get("author") != "customer_service":
                             continue
                         if text := _visible_text(event):
@@ -759,33 +776,28 @@ def create_app(
                             queue.put_nowait(_sse("text", {"text": text, "mode": mode}))
                 if not answer.strip() or not completed_answer:
                     raise RuntimeError("No customer-facing reply was received.")
-                # Read only managed references; do not infer current action
-                # status or turn a failed reference refresh into a failed reply.
-                try:
-                    snapshot = await asyncio.wait_for(
-                        backend.get_session(user_id, conversation_id, include_events=False),
-                        timeout=min(settings.api_timeout, 5),
-                    )
-                    if snapshot and snapshot.get("user_id") == user_id:
-                        references = _support_requests(snapshot)
-                        if references:
-                            queue.put_nowait(_sse("supportRequests", {
-                                "supportRequests": references,
-                            }))
-                except Exception as error:
-                    logger.warning("Support reference refresh failed (%s)", type(error).__name__)
                 queue.put_nowait(_sse("done", {}))
             except TimeoutError:
-                queue.put_nowait(_sse("error", {
-                    "message": "This reply took too long. Reopen this conversation to check its progress before sending again; a support request may already have been filed.",
-                    "retryable": False,
-                }))
+                queue.put_nowait(
+                    _sse(
+                        "error",
+                        {
+                            "message": "This reply took too long. Reopen the conversation to recover any saved answer, then try again.",
+                            "retryable": False,
+                        },
+                    )
+                )
             except Exception as error:
                 logger.warning("Customer chat turn failed (%s)", type(error).__name__)
-                queue.put_nowait(_sse("error", {
-                    "message": "We couldn't finish this reply. Reopen this conversation before sending again to check whether a support request was filed.",
-                    "retryable": False,
-                }))
+                queue.put_nowait(
+                    _sse(
+                        "error",
+                        {
+                            "message": "We couldn't finish this reply. Reopen the conversation to recover any saved answer, then try again.",
+                            "retryable": False,
+                        },
+                    )
+                )
             finally:
                 active_visitors.discard(user_id)
                 active_conversations.pop(user_id, None)
@@ -812,7 +824,10 @@ def create_app(
             StreamingResponse(
                 delivery(),
                 media_type="text/event-stream",
-                headers={"X-Accel-Buffering": "no", "X-Content-Type-Options": "nosniff"},
+                headers={
+                    "X-Accel-Buffering": "no",
+                    "X-Content-Type-Options": "nosniff",
+                },
             ),
             token,
             settings,

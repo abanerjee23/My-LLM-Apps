@@ -1,9 +1,9 @@
 """Verify managed sessions and Memory Bank on the deployed Agent Runtime.
 
 This deliberately creates two different managed sessions for one unique user.
-The first stores a contact preference and a free-form fact; the second asks what
-the assistant recalls. It spends model credits and changes only test session and
-memory data in the deployed runtime.
+The first stores a synthetic order/item/fault. The second asks a policy-related
+recall question. Run only after an approved deployment of the new source.
+It spends credits and changes test session/memory records, then removes them.
 """
 
 from __future__ import annotations
@@ -103,11 +103,10 @@ async def main() -> None:
             agent,
             user_id,
             first["id"],
-            "Please remember that my preferred contact is email at "
-            "river.memory.test@example.com and that I am training for my first marathon.",
+            "My Scree Trail shoes from order TF-88455 are faulty. Can I exchange them?",
         )
 
-        memory_ready_seconds = await _wait_for_memory(agent, user_id, "marathon")
+        memory_ready_seconds = await _wait_for_memory(agent, user_id, "TF-88455")
 
         second = await agent.async_create_session(user_id=user_id)
         session_ids.append(second["id"])
@@ -119,8 +118,7 @@ async def main() -> None:
             agent,
             user_id,
             second["id"],
-            "This is a new conversation. What contact details and personal goal do you "
-            "remember for me?",
+            "For my returns and exchanges question, which order and issue do you remember?",
         )
 
         print(f"Runtime: {runtime_name}")
@@ -133,9 +131,8 @@ async def main() -> None:
 
         checks = {
             "different managed sessions": first["id"] != second["id"],
-            "contact method": "email" in second_reply.lower(),
-            "contact detail": "river.memory.test@example.com" in second_reply.lower(),
-            "free-form Memory Bank fact": "marathon" in second_reply.lower(),
+            "sample order": "tf-88455" in second_reply.lower(),
+            "reported fault": "faulty" in second_reply.lower(),
         }
         for label, passed in checks.items():
             print(f"{'PASS' if passed else 'FAIL'}: {label}")

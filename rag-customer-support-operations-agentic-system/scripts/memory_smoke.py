@@ -5,14 +5,10 @@ model calls and therefore spends credits::
 
     make memory-smoke
 
-The first conversation supplies both structured contact state and an informal
-customer fact. The second starts with a new session ID for the same user. Its
-reply should use both without asking the customer to repeat them.
-
-Locally, structured ``user:`` state is persisted by SQLite and semantic memory
-uses ADK's in-process stand-in. A successful local run proves our wiring and UX;
-the same scenario must still be run against Agent Runtime to prove managed
-sessions and Memory Bank themselves.
+The first conversation supplies a sample order and reported fault. The second
+starts with a new session for the same user and asks a policy-related recall
+question. Only selected details enter memory, not contact data or conclusions.
+Local memory is in-process; managed Memory Bank needs a separate live check.
 """
 
 from __future__ import annotations
@@ -54,8 +50,7 @@ async def main() -> None:
     print(f"Customer identity: {user_id}")
 
     first_message = (
-        "Please remember two things for next time: contact me by email at "
-        "alex.memory.test@example.com, and I am training for my first marathon."
+        "My Scree Trail shoes from order TF-88455 are faulty. Can I exchange them?"
     )
     print(f"\nCONVERSATION A — CUSTOMER: {first_message}")
     started = time.monotonic()
@@ -70,8 +65,7 @@ async def main() -> None:
     )
 
     second_message = (
-        "This is a new conversation. What contact method and personal goal do "
-        "you remember for me?"
+        "For my returns and exchanges question, which order and issue do you remember?"
     )
     print(f"\nCONVERSATION B — CUSTOMER: {second_message}")
     started = time.monotonic()
@@ -86,9 +80,8 @@ async def main() -> None:
     )
 
     expected = {
-        "email": "email" in second_reply.lower(),
-        "contact detail": "alex.memory.test@example.com" in second_reply.lower(),
-        "personal goal": "marathon" in second_reply.lower(),
+        "sample order": "tf-88455" in second_reply.lower(),
+        "reported fault": "faulty" in second_reply.lower(),
     }
     print("\nCHECKS")
     for name, passed in expected.items():

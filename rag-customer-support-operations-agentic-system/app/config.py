@@ -1,6 +1,6 @@
 """Central configuration.
 
-Everything here is a deliberate decision recorded in BUILD_PLAN.md. The section
+Everything here is a deliberate decision recorded in docs/build-plan.md. The section
 references in the comments point at the decision that explains *why*, and what
 it costs us.
 """
@@ -36,27 +36,12 @@ def _ignore_stale_adc() -> None:
 
 _ignore_stale_adc()
 
-# --- Models (BUILD_PLAN 2.10) -------------------------------------------------
-# Split by job, not by agent seniority. The expensive model does the expensive
-# thinking: multi-clause policy judgement about someone's money. The root routes
-# and writes the reply, which is formatting work.
-#
-# These two constants are the ONLY place a model id appears.
-# gemini-3.1-pro-preview is a preview model with ~2 weeks of deprecation notice,
-# so a forced migration has to be a one-line change.
-
-# Returns & Billing specialists: refund eligibility, multi-clause reasoning.
-SPECIALIST_MODEL = "gemini-3.1-pro-preview"
-
-# Root orchestrator: pick a specialist, deliver the answer warmly. It must never
-# alter a specialist's ruling -- that constraint is instruction-following under
-# pressure, which is exactly where the smaller model is likeliest to slip, so it
-# is covered by a must-have eval case (BUILD_PLAN 4).
+# --- Model ---------------------------------------------------------------
+# One Flash response after deterministic retrieval. No routing/specialist calls.
 ROOT_MODEL = "gemini-3.8-flash"
 
-# Retries matter more than usual here: a three-agent turn means ~3x the calls
-# against preview-tier rate limits (BUILD_PLAN 2.2).
-MODEL_RETRY_ATTEMPTS = 3
+# Bounded retries: reliability without an unbounded latency multiplier.
+MODEL_RETRY_ATTEMPTS = 2
 
 
 # --- Google Cloud (BUILD_PLAN 2.9) --------------------------------------------
@@ -102,17 +87,10 @@ RAG_CORPUS_DISPLAY_NAME = os.getenv(
     "RAG_CORPUS_DISPLAY_NAME", "customer-service-policies"
 )
 
-# One corpus, scoped per specialist in the tool layer (BUILD_PLAN 2.4). A second
-# corpus would mean a second standing Spanner bill.
-# The returns specialist owns two documents: the policy sets the general rules,
-# the catalogue carries per-product overrides ("final sale", "unopened packs
-# only") that beat the general rule. Multi-document reasoning is the point.
+# Only these two documents are permitted as policy evidence.
 RETURNS_POLICY_DOCS = [
     os.getenv("RETURNS_POLICY_DOC", "tarnfield_returns_policy.pdf"),
     os.getenv("PRODUCT_CATALOGUE_DOC", "tarnfield_product_catalogue.pdf"),
-]
-BILLING_POLICY_DOCS = [
-    os.getenv("BILLING_POLICY_DOC", "tarnfield_billing_policy.pdf"),
 ]
 
 
@@ -133,17 +111,7 @@ SESSION_DB_PATH = os.getenv("SESSION_DB_PATH", "./.sessions/sessions.db")
 AGENT_ENGINE_ID = os.getenv("GOOGLE_CLOUD_AGENT_ENGINE_ID", "")
 
 
-# --- Memory (BUILD_PLAN 2.8) --------------------------------------------------
-# There is deliberately no MEMORY_BACKEND setting. Memory switches on the presence
-# of GOOGLE_CLOUD_AGENT_ENGINE_ID, which Agent Runtime injects at deploy time:
-# Memory Bank when deployed, a non-persistent stand-in locally. An env var here
-# would look like a control and change nothing, which is worse than no knob --
-# app/app_utils/services.py is where the actual selection lives.
-
-# Authority order (BUILD_PLAN 2.8): temp: < session state < user: state <
-# Memory Bank < policy corpus. Only the corpus may decide a ruling. Memory
-# changes how we speak to a customer and what we offer next, never the answer.
-#
-# user: state is the system of record for anything we can name in advance -- it
-# is exact, deletable, and works locally with no AGENT_ENGINE_ID. Memory Bank
-# covers only what no key could have been declared for in advance.
+# --- Memory --------------------------------------------------------------
+# The runtime uses Memory Bank; standalone local runners use in-process memory.
+# The chat gateway defaults to managed state even while executing local source.
+# Only fresh retrieved policy is authoritative; recalled details are context.

@@ -1,80 +1,71 @@
 {
-  "_comment": "Dummy data for the mocked tools (BUILD_PLAN 2.12). Read-only seed. Orders reference real product IDs from tarnfield_product_catalogue.pdf so eval cases can exercise real policy clauses. 'today' is 2026-09-12.",
-  "customers": {
-    "C-4471": {"name": "Priya Raman", "email": "priya@example.com"},
-    "C-1902": {"name": "Tom Beckett", "email": "tom@example.com"},
-    "C-7735": {"name": "Aisha Noor", "email": "aisha@example.com"},
-    "C-2210": {"name": "Dan Whelan", "email": "dan@example.com"}
-  },
+  "_comment": "Synthetic policy examples. Reference date: 2026-09-12. No real customer, contact or payment records.",
   "orders": {
     "TF-88213": {
-      "customer_id": "C-4471",
-      "placed": "2026-09-02", "delivered": "2026-09-05",
-      "items": [{"product_id": "TF-FW-106", "name": "Ridgeline Road, Solstice Edition", "qty": 1, "paid": 145.0}],
-      "delivery_charge": 4.95, "discount_code": null,
-      "payment": {"method": "card", "last4": "4417"},
-      "total_paid": 149.95, "status": "delivered",
-      "_case": "Final-sale item, inside the 14-day window. Window says yes, catalogue says no. Catalogue wins."
+      "delivered": "2026-09-05",
+      "items": [
+        {
+          "product_id": "TF-FW-106",
+          "name": "Ridgeline Road, Solstice Edition",
+          "qty": 1
+        }
+      ]
     },
     "TF-88120": {
-      "customer_id": "C-1902",
-      "placed": "2026-07-18", "delivered": "2026-07-21",
-      "items": [{"product_id": "TF-FW-101", "name": "Ridgeline Road", "qty": 1, "paid": 130.0}],
-      "delivery_charge": 4.95, "discount_code": null,
-      "payment": {"method": "card", "last4": "8801"},
-      "total_paid": 134.95, "status": "delivered",
-      "_case": "53 days since delivery. Well outside the window. Should refuse, and offer to ask anyway."
+      "delivered": "2026-07-21",
+      "items": [
+        {
+          "product_id": "TF-FW-101",
+          "name": "Ridgeline Road",
+          "qty": 1
+        }
+      ]
     },
     "TF-88341": {
-      "customer_id": "C-7735",
-      "placed": "2026-09-06", "delivered": "2026-09-09",
+      "delivered": "2026-09-09",
       "items": [
-        {"product_id": "TF-AP-201", "name": "Featherweight Run Tee", "qty": 2, "paid": 64.0},
-        {"product_id": "TF-AC-301", "name": "Everyday Run Sock, 3 pack", "qty": 1, "paid": 20.0}
-      ],
-      "delivery_charge": 0.0, "discount_code": "AUTUMN20",
-      "discount_minimum_spend": 75.0, "discount_value": 16.0,
-      "payment": {"method": "card", "last4": "2264"},
-      "total_paid": 84.0, "status": "delivered",
-      "_case": "Discount code with a 75 minimum. Returning the tees drops it below the minimum, so the sock refund is recalculated at full price. Needs billing policy 7 AND the returns policy."
+        {
+          "product_id": "TF-AP-201",
+          "name": "Featherweight Run Tee",
+          "qty": 2
+        },
+        {
+          "product_id": "TF-AC-301",
+          "name": "Everyday Run Sock, 3 pack",
+          "qty": 1
+        }
+      ]
     },
     "TF-88402": {
-      "customer_id": "C-2210",
-      "placed": "2026-09-08", "delivered": "2026-09-10",
-      "items": [{"product_id": "TF-FW-104", "name": "Tempest WP", "qty": 1, "paid": 160.0}],
-      "delivery_charge": 4.95, "discount_code": null,
-      "payment": {"method": "split", "gift_card_amount": 50.0, "card_amount": 114.95, "last4": "9003"},
-      "total_paid": 164.95, "status": "delivered",
-      "_case": "Split gift card + card payment. Refund splits proportionally (billing policy 5)."
+      "delivered": "2026-09-10",
+      "items": [
+        {
+          "product_id": "TF-FW-104",
+          "name": "Tempest WP",
+          "qty": 1
+        }
+      ]
     },
     "TF-88455": {
-      "customer_id": "C-4471",
-      "placed": "2026-09-09", "delivered": "2026-09-11",
-      "items": [{"product_id": "TF-FW-103", "name": "Scree Trail", "qty": 1, "paid": 140.0}],
-      "delivery_charge": 4.95, "discount_code": null,
-      "payment": {"method": "card", "last4": "4417"},
-      "total_paid": 144.95, "status": "delivered", "reported_fault": "sole separating at the toe",
-      "_case": "Faulty item. Free returns label, delivery charge refunded, customer chooses replacement or refund."
+      "delivered": "2026-09-11",
+      "items": [
+        {
+          "product_id": "TF-FW-103",
+          "name": "Scree Trail",
+          "qty": 1
+        }
+      ],
+      "reported_fault": "sole separating at the toe"
     },
     "TF-88490": {
-      "customer_id": "C-1902",
-      "placed": "2026-09-11", "delivered": null,
-      "items": [{"product_id": "TF-AP-202", "name": "Squall Shell Jacket", "qty": 1, "paid": 120.0}],
-      "delivery_charge": 4.95, "discount_code": null,
-      "payment": {"method": "card", "last4": "8801"},
-      "total_paid": 124.95, "status": "in_transit",
-      "_case": "Not delivered yet. The 14-day clock has not started."
+      "delivered": null,
+      "items": [
+        {
+          "product_id": "TF-AP-202",
+          "name": "Squall Shell Jacket",
+          "qty": 1
+        }
+      ]
     }
-  },
-  "invoices": {
-    "INV-5540": {"order_id": "TF-88213", "issued": "2026-09-02", "amount": 149.95, "vat": 24.99, "status": "paid"},
-    "INV-5541": {"order_id": "TF-88341", "issued": "2026-09-06", "amount": 84.0, "vat": 14.0, "status": "paid"},
-    "INV-5542": {"order_id": "TF-88402", "issued": "2026-09-08", "amount": 164.95, "vat": 27.49, "status": "paid"},
-    "INV-5543": {"order_id": "TF-88490", "issued": "2026-09-11", "amount": 124.95, "vat": 20.83, "status": "pending"}
-  },
-  "known_billing_events": {
-    "TF-88402": [{"date": "2026-09-08", "type": "authorisation_hold", "amount": 164.95, "cleared": false,
-                  "_case": "Looks like a duplicate charge to the customer. It is a hold (billing policy 4)."}]
-  },
-  "pending_requests": []
+  }
 }
